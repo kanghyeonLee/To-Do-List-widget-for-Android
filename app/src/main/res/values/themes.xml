@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    XML 기반 테마 (AndroidManifest에서 android:theme으로 참조)
+    실제 앱 테마는 Compose의 TodoTheme이 담당하므로
+    여기서는 Activity 초기 배경색 설정 정도만 처리한다.
+
+    Theme.ToDoList: Compose 앱을 위한 최소 테마
+    - windowBackground를 흰색으로 설정해 스플래시 화면 깜박임 방지
+    - NoActionBar: Compose Scaffold의 TopAppBar를 사용하므로 기본 ActionBar 숨김
+-->
+<resources>
+    <style name="Theme.ToDoList" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Compose setContent 전에 잠깐 보이는 배경 색상 -->
+        <item name="android:windowBackground">@android:color/white</item>
+        <!-- Edge-to-Edge: 상태바 / 네비게이션 바를 앱 영역으로 확장 -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

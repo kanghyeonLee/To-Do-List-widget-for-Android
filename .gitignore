@@ -1,0 +1,29 @@
+# Android 표준 .gitignore
+
+# 빌드 산출물
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.orig
+
+# 앱 모듈 빌드 산출물
+/app/build
+
+# Room 스키마는 버전 이력 추적을 위해 커밋 (제외하지 않음)
+# /app/schemas
+
+# Keystore (절대 커밋 금지)
+*.jks
+*.keystore
+
+# ProGuard 매핑 파일 (릴리즈 시 별도 보관)
+/app/proguard
+
+# gradle-wrapper.jar은 커밋 권장 (CI/CD 재현성)
+# !gradle/wrapper/gradle-wrapper.jar

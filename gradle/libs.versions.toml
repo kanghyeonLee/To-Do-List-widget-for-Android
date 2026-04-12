@@ -1,0 +1,119 @@
+# ──────────────────────────────────────────────────────────────────
+# Gradle Version Catalog
+# 모든 라이브러리 버전을 한 곳에서 관리한다.
+# Android Studio의 "Update Dependencies" 기능이 이 파일을 읽어 업데이트 제안.
+# ──────────────────────────────────────────────────────────────────
+
+[versions]
+# ── 빌드 도구 ────────────────────────────────────────────────────
+agp                  = "8.7.3"          # Android Gradle Plugin
+kotlin               = "2.0.21"         # Kotlin 컴파일러
+ksp                  = "2.0.21-1.0.28"  # Kotlin Symbol Processing (kapt 대체)
+
+# ── AndroidX Core ────────────────────────────────────────────────
+coreKtx              = "1.15.0"
+activityCompose      = "1.10.0"
+lifecycle            = "2.8.7"          # runtime-ktx, viewmodel-compose, runtime-compose 공통
+
+# ── Jetpack Compose ───────────────────────────────────────────────
+composeBom           = "2024.12.01"     # BOM이 하위 라이브러리 버전을 일괄 관리
+
+# ── Hilt (DI) ────────────────────────────────────────────────────
+hilt                 = "2.52"
+hiltNavigationCompose = "1.2.0"
+
+# ── Room (로컬 DB) ────────────────────────────────────────────────
+room                 = "2.6.1"
+
+# ── DataStore ─────────────────────────────────────────────────────
+datastore            = "1.1.1"
+
+# ── Coroutines ────────────────────────────────────────────────────
+coroutines           = "1.9.0"
+
+# ── 테스트 ───────────────────────────────────────────────────────
+junit                = "4.13.2"
+androidxJunit        = "1.2.1"
+espresso             = "3.6.1"
+
+# ──────────────────────────────────────────────────────────────────
+[libraries]
+# ──────────────────────────────────────────────────────────────────
+
+# ── AndroidX Core ────────────────────────────────────────────────
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx",
+    version.ref = "coreKtx" }
+
+# ── Lifecycle ────────────────────────────────────────────────────
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle",
+    name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+# collectAsStateWithLifecycle() 사용에 필요
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle",
+    name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+# hiltViewModel() 내부에서 사용
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle",
+    name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+
+# ── Activity Compose ──────────────────────────────────────────────
+androidx-activity-compose = { group = "androidx.activity",
+    name = "activity-compose", version.ref = "activityCompose" }
+
+# ── Compose BOM ──────────────────────────────────────────────────
+# BOM을 platform()으로 감싸면 하위 라이브러리에 version.ref 불필요
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom",
+    version.ref = "composeBom" }
+# BOM 관리 대상 라이브러리 (version 생략)
+androidx-ui                     = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics            = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling             = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview     = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-ui-test-manifest       = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-ui-test-junit4         = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-material3              = { group = "androidx.compose.material3", name = "material3" }
+# CheckCircle, RadioButtonUnchecked 등 아이콘 사용
+androidx-material-icons-extended = { group = "androidx.compose.material",
+    name = "material-icons-extended" }
+
+# ── Hilt ─────────────────────────────────────────────────────────
+hilt-android          = { group = "com.google.dagger", name = "hilt-android",
+    version.ref = "hilt" }
+hilt-compiler         = { group = "com.google.dagger", name = "hilt-compiler",
+    version.ref = "hilt" }
+# hiltViewModel() Composable 함수 제공
+hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose",
+    version.ref = "hiltNavigationCompose" }
+
+# ── Room ──────────────────────────────────────────────────────────
+room-runtime  = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+room-ktx      = { group = "androidx.room", name = "room-ktx",     version.ref = "room" }
+# KSP로 처리 (ksp() 블록에 선언)
+room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# ── DataStore ─────────────────────────────────────────────────────
+datastore-preferences = { group = "androidx.datastore",
+    name = "datastore-preferences", version.ref = "datastore" }
+
+# ── Coroutines ────────────────────────────────────────────────────
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx",
+    name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# ── 테스트 ───────────────────────────────────────────────────────
+junit                  = { group = "junit",             name = "junit",
+    version.ref = "junit" }
+androidx-junit         = { group = "androidx.test.ext", name = "junit",
+    version.ref = "androidxJunit" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core",
+    version.ref = "espresso" }
+
+# ──────────────────────────────────────────────────────────────────
+[plugins]
+# ──────────────────────────────────────────────────────────────────
+android-application = { id = "com.android.application",           version.ref = "agp" }
+kotlin-android      = { id = "org.jetbrains.kotlin.android",      version.ref = "kotlin" }
+# Kotlin 2.0+: Compose 컴파일러가 별도 플러그인으로 분리됨
+# composeOptions.kotlinCompilerExtensionVersion 설정 불필요
+kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+hilt                = { id = "com.google.dagger.hilt.android",    version.ref = "hilt" }
+ksp                 = { id = "com.google.devtools.ksp",           version.ref = "ksp" }
+# Room Gradle Plugin: schemaDirectory 설정을 room {} 블록으로 간결하게
+room                = { id = "androidx.room",                     version.ref = "room" }

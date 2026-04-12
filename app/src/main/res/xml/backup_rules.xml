@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 11 이하 백업 규칙 (fullBackupContent)
+    AndroidManifest의 android:fullBackupContent 에서 참조
+-->
+<full-backup-content>
+    <exclude domain="database" path="todo_database" />
+    <exclude domain="database" path="todo_database-shm" />
+    <exclude domain="database" path="todo_database-wal" />
+</full-backup-content>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ (API 31) 백업 규칙
+    AndroidManifest의 android:dataExtractionRules 에서 참조
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Room DB는 백업에서 제외 (기기 이전 시 DB 복원은 마이그레이션으로 처리) -->
+        <exclude domain="database" path="todo_database" />
+        <exclude domain="database" path="todo_database-shm" />
+        <exclude domain="database" path="todo_database-wal" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="todo_database" />
+    </device-transfer>
+</data-extraction-rules>
