@@ -9,10 +9,14 @@
     - NoActionBar: Compose Scaffold의 TopAppBar를 사용하므로 기본 ActionBar 숨김
 -->
 <resources>
-    <style name="Theme.ToDoList" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Compose setContent 전에 잠깐 보이는 배경 색상 -->
+    <!--
+        parent: android 내장 테마 사용
+        - Theme.Material3.* 는 com.google.android.material 라이브러리 필요 → 제거
+        - 순수 Compose 앱은 XML 테마가 최소화되어도 무방
+        - 실제 테마(색상, 타이포그래피)는 Compose 의 TodoTheme 이 담당
+    -->
+    <style name="Theme.ToDoList" parent="android:Theme.DeviceDefault.NoActionBar">
+        <!-- Compose setContent 전에 잠깐 보이는 스플래시 배경색 -->
         <item name="android:windowBackground">@android:color/white</item>
-        <!-- Edge-to-Edge: 상태바 / 네비게이션 바를 앱 영역으로 확장 -->
-        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>
