@@ -56,8 +56,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kanghyeon.todolist.data.local.entity.Priority
-import com.kanghyeon.todolist.data.local.entity.TaskEntity
-import com.kanghyeon.todolist.presentation.theme.OverdueRed
 import com.kanghyeon.todolist.presentation.theme.PriorityHigh
 import com.kanghyeon.todolist.presentation.theme.PriorityLow
 import com.kanghyeon.todolist.presentation.theme.PriorityMedium
@@ -133,8 +131,8 @@ fun MainScreen(
                     )
                 },
                 actions = {
-                    // 완료 항목 전체 삭제 버튼
-                    if (uiState.completedTasks.isNotEmpty()) {
+                    // 아카이브 탭에서만 전체 삭제 버튼 노출
+                    if (selectedTab == 1 && uiState.completedTasks.isNotEmpty()) {
                         IconButton(onClick = viewModel::clearCompleted) {
                             Icon(
                                 imageVector = Icons.Outlined.Delete,
@@ -151,35 +149,38 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showBottomSheet = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("할 일 추가") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            )
+            // 아카이브 탭에서는 FAB 숨김
+            if (selectedTab == 0) {
+                ExtendedFloatingActionButton(
+                    onClick = { showBottomSheet = true },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("할 일 추가") },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
 
         Column(modifier = Modifier.padding(innerPadding)) {
 
-            // ── 탭: 오늘 / 전체 ───────────────────────────────
+            // ── 탭: 할 일 / 아카이브 ─────────────────────────
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     text = {
-                        val count = uiState.todayTasks.size + uiState.overdueTasks.size
-                        Text(if (count > 0) "오늘 ($count)" else "오늘")
+                        val count = uiState.sortedTasks.size
+                        Text(if (count > 0) "할 일 ($count)" else "할 일")
                     },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     text = {
-                        val count = uiState.allTasks.count { !it.isDone }
-                        Text(if (count > 0) "전체 ($count)" else "전체")
+                        val count = uiState.completedTasks.size
+                        Text(if (count > 0) "아카이브 ($count)" else "아카이브")
                     },
                 )
             }
@@ -187,8 +188,8 @@ fun MainScreen(
             // ── 탭 콘텐츠 ────────────────────────────────────
             when {
                 uiState.isLoading -> LoadingContent()
-                selectedTab == 0  -> TodayContent(uiState, viewModel)
-                else              -> AllContent(uiState, viewModel)
+                selectedTab == 0  -> TodoContent(uiState, viewModel)
+                else              -> ArchiveContent(uiState, viewModel)
             }
         }
     }
@@ -212,101 +213,23 @@ fun MainScreen(
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 탭 콘텐츠: 오늘
-// ══════════════════════════════════════════════════════════════════
-
-@Composable
-private fun TodayContent(
-    uiState: TaskUiState,
-    viewModel: TaskViewModel,
-) {
-    val hasOverdue = uiState.overdueTasks.isNotEmpty()
-    val hasToday   = uiState.todayTasks.isNotEmpty()
-
-    if (!hasOverdue && !hasToday) {
-        EmptyContent(
-            icon = Icons.Outlined.CheckCircle,
-            message = "오늘 할 일이 없어요",
-            subMessage = "할 일을 추가하거나\n'오늘 마감'으로 설정해 보세요.",
-        )
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // ── 기한 초과 섹션 ─────────────────────────────────
-        if (hasOverdue) {
-            item(key = "overdue_header") {
-                SectionHeader(
-                    title = "기한 초과",
-                    count = uiState.overdueTasks.size,
-                    titleColor = OverdueRed,
-                )
-            }
-            items(
-                items = uiState.overdueTasks,
-                key = { "overdue_${it.id}" },
-            ) { task ->
-                TaskItem(
-                    task = task,
-                    onToggleDone = { viewModel.toggleDone(task.id, task.isDone) },
-                    onDelete = { viewModel.deleteTask(task) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-            item(key = "overdue_spacer") { Spacer(Modifier.height(8.dp)) }
-        }
-
-        // ── 오늘 섹션 ─────────────────────────────────────
-        if (hasToday) {
-            item(key = "today_header") {
-                SectionHeader(
-                    title = "오늘",
-                    count = uiState.todayTasks.size,
-                )
-            }
-            items(
-                items = uiState.todayTasks,
-                key = { "today_${it.id}" },
-            ) { task ->
-                TaskItem(
-                    task = task,
-                    onToggleDone = { viewModel.toggleDone(task.id, task.isDone) },
-                    onDelete = { viewModel.deleteTask(task) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-        }
-
-        item { Spacer(Modifier.height(80.dp)) } // FAB 여백
-    }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 탭 콘텐츠: 전체 (중요도 섹션 분리)
+// 탭 콘텐츠: 할 일 (미완료 priority 섹션)
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * 미완료 항목을 HIGH / MEDIUM / LOW 섹션으로 나눠 stickyHeader로 표시.
- * 각 섹션 헤더는 스크롤 시 상단에 고정된다.
+ * 미완료 할 일 전체를 HIGH / MEDIUM / LOW 섹션으로 나눠 표시.
  *
  * 데이터 출처: [TaskUiState.sortedTasks]
- *   - DB에서 priority DESC, createdAt DESC 순으로 이미 정렬되어 옴
- *   - UI에서 groupBy(Priority)하여 섹션별로 분리
+ *   - DAO: isDone = 0, ORDER BY priority DESC, createdAt DESC
+ *   - UI : groupBy(Priority) → 섹션별 PriorityGroupCard
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AllContent(
+private fun TodoContent(
     uiState: TaskUiState,
     viewModel: TaskViewModel,
 ) {
-    val grouped       = uiState.sortedTasks.groupBy { Priority.from(it.priority) }
-    val completedTasks = uiState.completedTasks
-
-    if (uiState.sortedTasks.isEmpty() && completedTasks.isEmpty()) {
+    if (uiState.sortedTasks.isEmpty()) {
         EmptyContent(
             icon = Icons.Outlined.CheckCircle,
             message = "할 일이 없어요",
@@ -315,7 +238,8 @@ private fun AllContent(
         return
     }
 
-    // priority → (레이블, 액센트 색상)
+    val grouped = uiState.sortedTasks.groupBy { Priority.from(it.priority) }
+
     data class PriorityMeta(val label: String, val accent: Color)
     val priorityMeta = mapOf(
         Priority.HIGH   to PriorityMeta("높음", PriorityHigh),
@@ -328,7 +252,6 @@ private fun AllContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // ── 중요도별 섹션 카드 (HIGH → MEDIUM → LOW) ─────────
         Priority.entries
             .sortedByDescending { it.value }
             .forEach { priority ->
@@ -336,7 +259,6 @@ private fun AllContent(
                 if (!tasks.isNullOrEmpty()) {
                     val meta = priorityMeta.getValue(priority)
 
-                    // 섹션 헤더 (스크롤 시 상단 고정)
                     stickyHeader(key = "priority_header_${priority.name}") {
                         PrioritySectionHeader(
                             label = meta.label,
@@ -345,7 +267,6 @@ private fun AllContent(
                         )
                     }
 
-                    // 해당 priority의 모든 Task를 하나의 ElevatedCard로 묶음
                     item(key = "priority_card_${priority.name}") {
                         PriorityGroupCard(
                             tasks = tasks,
@@ -359,29 +280,46 @@ private fun AllContent(
                 }
             }
 
-        // ── 완료 목록 ─────────────────────────────────────
-        if (completedTasks.isNotEmpty()) {
-            stickyHeader(key = "priority_header_completed") {
-                PrioritySectionHeader(
-                    label = "완료됨",
-                    count = completedTasks.size,
-                    dotColor = MaterialTheme.colorScheme.outline,
-                )
-            }
-            items(
-                items = completedTasks,
-                key = { "done_${it.id}" },
-            ) { task ->
-                TaskItem(
-                    task = task,
-                    onToggleDone = { viewModel.toggleDone(task.id, task.isDone) },
-                    onDelete = { viewModel.deleteTask(task) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
+        item { Spacer(Modifier.height(80.dp)) } // FAB 여백
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 탭 콘텐츠: 아카이브 (완료된 할 일)
+// ══════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ArchiveContent(
+    uiState: TaskUiState,
+    viewModel: TaskViewModel,
+) {
+    if (uiState.completedTasks.isEmpty()) {
+        EmptyContent(
+            icon = Icons.Outlined.CheckCircle,
+            message = "완료된 할 일이 없어요",
+            subMessage = "할 일을 체크하면 여기에 기록됩니다.",
+        )
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(
+            items = uiState.completedTasks,
+            key = { "archive_${it.id}" },
+        ) { task ->
+            TaskItem(
+                task = task,
+                onToggleDone = { viewModel.toggleDone(task.id, task.isDone) },
+                onDelete = { viewModel.deleteTask(task) },
+                modifier = Modifier.animateItem(),
+            )
         }
 
-        item { Spacer(Modifier.height(80.dp)) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
