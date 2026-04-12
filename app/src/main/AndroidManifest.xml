@@ -40,6 +40,15 @@
     -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!--
+        REQUEST_IGNORE_BATTERY_OPTIMIZATIONS (API 23+)
+        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS 인텐트 사용 시 필수.
+        없으면 런타임에 SecurityException 발생.
+        [Google Play 정책] 배포 시 배터리 최적화가 핵심 기능에 반드시 필요한 이유를
+        Play Console에 선언(declaration)으로 제출해야 함.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- ══════════════════════════════════════════════════════
          Application
          ══════════════════════════════════════════════════════ -->

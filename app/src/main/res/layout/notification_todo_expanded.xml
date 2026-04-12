@@ -1,17 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    잠금화면 / 알림 패널의 커스텀 확장 뷰 (펼쳤을 때 표시)
+    RemoteViews 전용 알림 확장 뷰
 
-    [Android 12+ 제약]
-    - DecoratedCustomViewStyle 사용 시 시스템 헤더(앱 이름, 시간)가 자동 추가됨
-    - 이 뷰 자체의 최대 높이: 256dp
-    - RemoteViews에서 사용 가능한 뷰: LinearLayout, RelativeLayout, FrameLayout,
-      TextView, ImageView, ImageButton, Button, ProgressBar 등
-      (ConstraintLayout, RecyclerView 등 커스텀 뷰는 사용 불가)
+    [RemoteViews 허용 뷰 — Android 공식 문서 기준]
+    FrameLayout, LinearLayout, RelativeLayout, GridLayout
+    TextView, ImageView, ImageButton, Button, ProgressBar
+    Chronometer, TextClock, AnalogClock
+    ListView, GridView, StackView, ViewFlipper, AdapterViewFlipper
+
+    [사용 금지 — 인플레이션 크래시 원인]
+    - <View>          : android.view.View 는 허용 목록에 없음
+                        → 구분선은 height=1dp 짜리 <LinearLayout> 으로 대체
+    - android:tint    : RemoteViews XML 에서 미지원
+                        → 아이콘 drawable 자체의 색상(ic_check_circle_outline 의 #757575)을 사용
+    - ?attr/ / ?android:attr/ 테마 참조 background
+                        → 알림 컨텍스트는 앱 테마를 적용하지 않으므로 불가
+                        → @android:color/transparent 로 대체
 
     [슬롯 구조]
-    slot_0, slot_1, slot_2: 최대 3개의 할 일 슬롯 (고정, VISIBLE/GONE 토글)
-    tv_more_count          : "외 N개 더..." 텍스트 (초과 시 표시)
+    slot_0_container ~ slot_2_container : 최대 3개 할 일 슬롯 (VISIBLE/GONE 토글)
+    divider_0 ~ divider_1               : 슬롯 사이 구분선 (LinearLayout 1dp)
+    tv_more_count                       : "외 N개 더..." (초과 시 VISIBLE)
 -->
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -23,7 +32,9 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <!-- ── 슬롯 0 ─────────────────────────────────── -->
+    <!-- ══════════════════════════════════════════
+         슬롯 0
+         ══════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/slot_0_container"
         android:layout_width="match_parent"
@@ -32,8 +43,12 @@
         android:gravity="center_vertical"
         android:visibility="gone">
 
-        <!-- 높은 우선순위 표시 점 (HIGH 일 때만 VISIBLE) -->
-        <View
+        <!--
+            우선순위 점: <View> 대신 <ImageView> 사용
+            - src 없이 background 만으로 색상 표현
+            - RemoteViews 허용 목록에 ImageView 포함
+        -->
+        <ImageView
             android:id="@+id/slot_0_priority"
             android:layout_width="8dp"
             android:layout_height="8dp"
@@ -51,25 +66,36 @@
             android:textSize="14sp"
             android:textColor="@color/notification_text_primary" />
 
-        <!-- 완료 버튼 -->
+        <!--
+            완료 버튼:
+            - android:tint 제거 (RemoteViews 미지원) → drawable 자체 색상(#757575) 사용
+            - background: ?attr/ 테마 참조 제거 → @android:color/transparent 사용
+        -->
         <ImageButton
             android:id="@+id/slot_0_done_btn"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@drawable/ic_check_circle_outline"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="완료"
-            android:tint="@color/notification_action_tint" />
+            android:background="@android:color/transparent"
+            android:contentDescription="완료" />
     </LinearLayout>
 
-    <View
+    <!--
+        구분선: <View> 대신 height=1dp 짜리 <LinearLayout> 사용
+        - <View>(android.view.View)는 RemoteViews 허용 목록에 없음
+        - LinearLayout 은 허용되며 background 속성으로 색상 표현 가능
+    -->
+    <LinearLayout
         android:id="@+id/divider_0"
         android:layout_width="match_parent"
-        android:layout_height="0.5dp"
+        android:layout_height="1dp"
+        android:orientation="horizontal"
         android:background="@color/notification_divider"
         android:visibility="gone" />
 
-    <!-- ── 슬롯 1 ─────────────────────────────────── -->
+    <!-- ══════════════════════════════════════════
+         슬롯 1
+         ══════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/slot_1_container"
         android:layout_width="match_parent"
@@ -78,7 +104,7 @@
         android:gravity="center_vertical"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/slot_1_priority"
             android:layout_width="8dp"
             android:layout_height="8dp"
@@ -101,19 +127,21 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@drawable/ic_check_circle_outline"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="완료"
-            android:tint="@color/notification_action_tint" />
+            android:background="@android:color/transparent"
+            android:contentDescription="완료" />
     </LinearLayout>
 
-    <View
+    <LinearLayout
         android:id="@+id/divider_1"
         android:layout_width="match_parent"
-        android:layout_height="0.5dp"
+        android:layout_height="1dp"
+        android:orientation="horizontal"
         android:background="@color/notification_divider"
         android:visibility="gone" />
 
-    <!-- ── 슬롯 2 ─────────────────────────────────── -->
+    <!-- ══════════════════════════════════════════
+         슬롯 2
+         ══════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/slot_2_container"
         android:layout_width="match_parent"
@@ -122,7 +150,7 @@
         android:gravity="center_vertical"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/slot_2_priority"
             android:layout_width="8dp"
             android:layout_height="8dp"
@@ -145,12 +173,13 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@drawable/ic_check_circle_outline"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="완료"
-            android:tint="@color/notification_action_tint" />
+            android:background="@android:color/transparent"
+            android:contentDescription="완료" />
     </LinearLayout>
 
-    <!-- ── 초과 항목 안내 ───────────────────────────── -->
+    <!-- ══════════════════════════════════════════
+         초과 항목 안내 ("외 N개 더...")
+         ══════════════════════════════════════════ -->
     <TextView
         android:id="@+id/tv_more_count"
         android:layout_width="wrap_content"
