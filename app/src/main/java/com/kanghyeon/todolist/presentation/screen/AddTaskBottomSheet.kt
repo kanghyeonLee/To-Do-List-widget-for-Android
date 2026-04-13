@@ -28,9 +28,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.ui.viewinterop.AndroidView
+import android.os.Build
+import android.view.LayoutInflater
+import com.kanghyeon.todolist.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -137,26 +139,49 @@ fun AddTaskBottomSheet(
         scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
     }
 
-    // ── TimePickerDialog ──────────────────────────────────────
+    // ── TimePickerDialog (스피너 휠 방식) ────────────────────
     if (showTimePicker) {
         val now = LocalTime.now()
-        val timePickerState = rememberTimePickerState(
-            initialHour   = selectedTime?.hour   ?: now.hour,
-            initialMinute = selectedTime?.minute ?: now.minute,
-            is24Hour      = true,
-        )
+        // 내부 상태: setOnTimeChangedListener → 상태 업데이트 → 확인 버튼에서 읽기
+        var pickerHour   by remember { mutableIntStateOf(selectedTime?.hour   ?: now.hour) }
+        var pickerMinute by remember { mutableIntStateOf(selectedTime?.minute ?: now.minute) }
+
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
+                    selectedTime = LocalTime.of(pickerHour, pickerMinute)
                     showTimePicker = false
                 }) { Text("확인") }
             },
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) { Text("취소") }
             },
-            text = { TimePicker(state = timePickerState) },
+            text = {
+                // AndroidView로 XML에서만 지정 가능한 timePickerMode="spinner" 적용
+                AndroidView(
+                    factory = { ctx ->
+                        val tp = LayoutInflater.from(ctx)
+                            .inflate(R.layout.time_picker_spinner, null)
+                            as android.widget.TimePicker
+                        tp.setIs24HourView(false) // 12시간제 (AM/PM)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            tp.hour   = pickerHour
+                            tp.minute = pickerMinute
+                        } else {
+                            @Suppress("DEPRECATION")
+                            tp.currentHour   = pickerHour
+                            @Suppress("DEPRECATION")
+                            tp.currentMinute = pickerMinute
+                        }
+                        tp.setOnTimeChangedListener { _, h, m ->
+                            pickerHour   = h
+                            pickerMinute = m
+                        }
+                        tp
+                    },
+                )
+            },
         )
     }
 

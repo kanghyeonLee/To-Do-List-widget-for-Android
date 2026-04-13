@@ -19,14 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,7 +72,6 @@ import com.kanghyeon.todolist.presentation.theme.PriorityMedium
 import com.kanghyeon.todolist.presentation.viewmodel.TaskEvent
 import com.kanghyeon.todolist.presentation.viewmodel.TaskUiState
 import com.kanghyeon.todolist.presentation.viewmodel.TaskViewModel
-import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -365,13 +361,29 @@ private fun ArchiveContent(
         }
     }
 
+    // 현재 선택 날짜 표시 텍스트 ("2026년 4월 13일 ▼")
+    val selectedLocalDate = remember(archiveDate) {
+        Instant.ofEpochMilli(archiveDate).atZone(ZoneId.systemDefault()).toLocalDate()
+    }
+    val dateLabel = remember(selectedLocalDate) {
+        selectedLocalDate.format(DateTimeFormatter.ofPattern("yyyy년 M월 d일", Locale.KOREA))
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // ── 가로 날짜 바 ──────────────────────────────────
-        HorizontalDateStrip(
-            selectedDateMs  = archiveDate,
-            onDateSelected  = { viewModel.selectArchiveDate(it) },
-            onCalendarClick = { showDatePicker = true },
-        )
+        // ── 날짜 선택 텍스트 버튼 ─────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            TextButton(onClick = { showDatePicker = true }) {
+                Text(
+                    text  = "$dateLabel  ▼",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
         HorizontalDivider()
 
         // ── 해당 날짜 완료 목록 ───────────────────────────
@@ -401,191 +413,6 @@ private fun ArchiveContent(
                 item { Spacer(Modifier.height(24.dp)) }
             }
         }
-    }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// HorizontalDateStrip — 가로 스크롤형 날짜 바
-// ══════════════════════════════════════════════════════════════════
-
-/** 날짜 바에 표시할 과거 날짜 수 (오늘 포함 총 DATE_STRIP_TOTAL일) */
-private const val DATE_STRIP_DAYS_BACK = 89  // 오늘 + 89일 전 = 90개
-
-/**
- * 가로 스크롤 날짜 선택 바.
- *
- * [설계]
- * - 오늘 포함 최근 90일을 LazyRow로 나열 (오래된 날짜가 왼쪽)
- * - 선택된 날짜는 자동으로 중앙 근처로 스크롤 (animateScrollToItem)
- * - 오른쪽 끝 캘린더 아이콘 → 백업 DatePickerDialog 호출
- *
- * @param selectedDateMs  현재 선택된 날짜의 시작 epoch ms (로컬 자정)
- * @param onDateSelected  날짜 칩 클릭 시 해당 날짜의 시작 epoch ms 전달
- * @param onCalendarClick 캘린더 아이콘 클릭 콜백
- */
-@Composable
-private fun HorizontalDateStrip(
-    selectedDateMs: Long,
-    onDateSelected: (Long) -> Unit,
-    onCalendarClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val zone  = remember { ZoneId.systemDefault() }
-    val today = remember { LocalDate.now(zone) }
-
-    // 89일 전 ~ 오늘 (총 90개)
-    val dates = remember(today) {
-        (DATE_STRIP_DAYS_BACK downTo 0).map { daysBack ->
-            today.minusDays(daysBack.toLong())
-        }
-    }
-
-    val selectedDate = remember(selectedDateMs) {
-        Instant.ofEpochMilli(selectedDateMs).atZone(zone).toLocalDate()
-    }
-
-    // 선택 날짜의 목록 인덱스
-    val selectedIndex = remember(selectedDate) {
-        dates.indexOfFirst { it == selectedDate }.coerceAtLeast(0)
-    }
-
-    // 선택 날짜에 해당하는 월 레이블 (선택 변경 시 갱신)
-    val monthLabel = remember(selectedDate) {
-        selectedDate.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREA))
-    }
-
-    val listState = rememberLazyListState()
-
-    // 선택 날짜가 바뀌면 해당 항목이 뷰 중앙에 오도록 스크롤
-    LaunchedEffect(selectedIndex) {
-        listState.animateScrollToItem(
-            index  = (selectedIndex - 3).coerceAtLeast(0),
-        )
-    }
-
-    Column(modifier = modifier.fillMaxWidth()) {
-
-        // ── 헤더: 월 레이블 + 캘린더 아이콘 ─────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment     = Alignment.CenterVertically,
-        ) {
-            Text(
-                text  = monthLabel,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.primary,
-            )
-            IconButton(onClick = onCalendarClick) {
-                Icon(
-                    imageVector        = Icons.Outlined.CalendarMonth,
-                    contentDescription = "달력에서 날짜 선택",
-                    tint               = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
-
-        // ── 날짜 칩 LazyRow ────────────────────────────────
-        LazyRow(
-            state           = listState,
-            contentPadding  = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier        = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp),
-        ) {
-            items(
-                count = dates.size,
-                key   = { dates[it].toEpochDay() },
-            ) { idx ->
-                val date    = dates[idx]
-                val startMs = date.atStartOfDay(zone).toInstant().toEpochMilli()
-                DateChip(
-                    date       = date,
-                    isSelected = date == selectedDate,
-                    isToday    = date == today,
-                    onClick    = { onDateSelected(startMs) },
-                )
-            }
-        }
-    }
-}
-
-/**
- * 날짜 바의 개별 날짜 칩.
- *
- * [시각 언어]
- * - 선택됨   : primary 배경 + onPrimary 텍스트
- * - 오늘(미선택): primary 텍스트 + 굵게 + 하단 점
- * - 일요일   : error 색상
- * - 토요일   : tertiary 색상
- * - 평일     : onSurfaceVariant
- */
-@Composable
-private fun DateChip(
-    date: LocalDate,
-    isSelected: Boolean,
-    isToday: Boolean,
-    onClick: () -> Unit,
-) {
-    val dayOfWeek = date.dayOfWeek
-
-    val containerColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        Color.Transparent
-    }
-
-    val baseTextColor = when {
-        isToday              -> MaterialTheme.colorScheme.primary
-        dayOfWeek == DayOfWeek.SUNDAY   -> MaterialTheme.colorScheme.error
-        dayOfWeek == DayOfWeek.SATURDAY -> MaterialTheme.colorScheme.tertiary
-        else                 -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else baseTextColor
-
-    // 하단 점: 오늘 표시 (선택된 경우 onPrimary, 미선택이면 primary)
-    val dotColor = when {
-        isToday && isSelected  -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-        isToday && !isSelected -> MaterialTheme.colorScheme.primary
-        else                   -> Color.Transparent
-    }
-
-    val weekdayLabel = date.format(DateTimeFormatter.ofPattern("E", Locale.KOREA))
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-        modifier = Modifier
-            .width(40.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(containerColor)
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 2.dp),
-    ) {
-        // 요일 (월 / 화 / …)
-        Text(
-            text  = weekdayLabel,
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor,
-        )
-        // 일 숫자
-        Text(
-            text  = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-            ),
-            color = textColor,
-        )
-        // 오늘 표시 점
-        Box(
-            modifier = Modifier
-                .size(4.dp)
-                .clip(CircleShape)
-                .background(dotColor),
-        )
     }
 }
 
