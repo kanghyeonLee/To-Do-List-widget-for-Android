@@ -111,9 +111,10 @@ fun MainScreen(
     val archiveDate  by viewModel.selectedArchiveDate.collectAsStateWithLifecycle()
     val archiveTasks by viewModel.archiveTasks.collectAsStateWithLifecycle()
 
+    val editingTask     by viewModel.editingTask.collectAsStateWithLifecycle()
+
     val snackbarHostState = remember { SnackbarHostState() }
     var showBottomSheet by remember { mutableStateOf(false) }
-    var editingTask     by remember { mutableStateOf<TaskEntity?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
     // TopAppBar 스크롤 연동 (스크롤 시 TopAppBar 축소)
@@ -211,7 +212,7 @@ fun MainScreen(
             // ── 탭 콘텐츠 ────────────────────────────────────
             when {
                 uiState.isLoading -> LoadingContent()
-                selectedTab == 0  -> TodoContent(uiState, viewModel, onEdit = { editingTask = it })
+                selectedTab == 0  -> TodoContent(uiState, viewModel, onEdit = { viewModel.setEditingTask(it) })
                 else              -> ArchiveContent(archiveDate, archiveTasks, viewModel)
             }
         }
@@ -219,34 +220,22 @@ fun MainScreen(
 
     // ── 할 일 추가 / 수정 BottomSheet ────────────────────────
     if (showBottomSheet || editingTask != null) {
-        val et = editingTask
         AddTaskBottomSheet(
-            task = et,
-            onDismiss = { showBottomSheet = false; editingTask = null },
-            onSave = { title, desc, priority, dueDate, showOnLock, reminderMinutes ->
-                if (et != null) {
-                    viewModel.updateTask(
-                        et.copy(
-                            title            = title,
-                            description      = desc,
-                            priority         = priority,
-                            dueDate          = dueDate,
-                            showOnLockScreen = showOnLock,
-                            reminderMinutes  = reminderMinutes,
-                        )
-                    )
-                } else {
-                    viewModel.addTask(
-                        title            = title,
-                        description      = desc,
-                        priority         = priority,
-                        dueDate          = dueDate,
-                        showOnLockScreen = showOnLock,
-                        reminderMinutes  = reminderMinutes,
-                    )
-                }
+            task = editingTask,
+            onDismiss = {
                 showBottomSheet = false
-                editingTask = null
+                viewModel.setEditingTask(null)
+            },
+            onSave = { title, desc, priority, dueDate, showOnLock, reminderMinutes ->
+                viewModel.saveCurrentTask(
+                    title            = title,
+                    description      = desc,
+                    priority         = priority,
+                    dueDate          = dueDate,
+                    showOnLockScreen = showOnLock,
+                    reminderMinutes  = reminderMinutes,
+                )
+                showBottomSheet = false
             },
         )
     }

@@ -65,6 +65,11 @@ class TaskRepositoryImpl @Inject constructor(
             dao.upsert(task)
         }
 
+    override suspend fun updateTask(task: TaskEntity) =
+        withContext(dispatcher) {
+            dao.update(task)
+        }
+
     override suspend fun toggleDone(id: Long, isDone: Boolean) =
         withContext(dispatcher) {
             dao.updateDoneStatus(

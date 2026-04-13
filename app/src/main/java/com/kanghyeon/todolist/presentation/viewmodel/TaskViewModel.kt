@@ -119,6 +119,12 @@ class TaskViewModel @Inject constructor(
             initialValue = emptyList(),
         )
 
+    // ── 편집 중인 Task ────────────────────────────────────
+    private val _editingTask = MutableStateFlow<TaskEntity?>(null)
+    val editingTask: StateFlow<TaskEntity?> = _editingTask.asStateFlow()
+
+    fun setEditingTask(task: TaskEntity?) { _editingTask.value = task }
+
     // ── 일회성 이벤트 채널 ────────────────────────────────
     private val _eventChannel = Channel<TaskEvent>(Channel.BUFFERED)
     val events = _eventChannel.receiveAsFlow()
@@ -126,6 +132,53 @@ class TaskViewModel @Inject constructor(
     // ──────────────────────────────────────────────────────
     // 사용자 액션 핸들러
     // ──────────────────────────────────────────────────────
+
+    /**
+     * 추가/수정 통합 저장
+     * editingTask가 있으면 update, 없으면 insert
+     */
+    fun saveCurrentTask(
+        title: String,
+        description: String? = null,
+        priority: Int = 1,
+        dueDate: Long? = null,
+        showOnLockScreen: Boolean = true,
+        reminderMinutes: Int? = null,
+    ) {
+        if (title.isBlank()) {
+            emitEvent(TaskEvent.ShowMessage("제목을 입력해 주세요."))
+            return
+        }
+        val editing = _editingTask.value
+        viewModelScope.launch {
+            if (editing != null) {
+                val updated = editing.copy(
+                    title            = title.trim(),
+                    description      = description?.trim(),
+                    priority         = priority,
+                    dueDate          = dueDate,
+                    showOnLockScreen = showOnLockScreen,
+                    reminderMinutes  = reminderMinutes,
+                    updatedAt        = System.currentTimeMillis(),
+                )
+                repository.updateTask(updated)
+                alarmScheduler.cancel(editing.id)
+                alarmScheduler.schedule(updated)
+            } else {
+                val task = TaskEntity(
+                    title            = title.trim(),
+                    description      = description?.trim(),
+                    priority         = priority,
+                    dueDate          = dueDate,
+                    showOnLockScreen = showOnLockScreen,
+                    reminderMinutes  = reminderMinutes,
+                )
+                val id = repository.saveTask(task)
+                alarmScheduler.schedule(task.copy(id = id))
+            }
+            _editingTask.value = null
+        }
+    }
 
     /** 새 할 일 추가 */
     fun addTask(

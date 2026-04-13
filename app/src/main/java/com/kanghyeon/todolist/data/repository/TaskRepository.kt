@@ -44,6 +44,9 @@ interface TaskRepository {
      */
     suspend fun saveTask(task: TaskEntity): Long
 
+    /** 기존 할 일 수정 (id가 일치하는 행만 업데이트) */
+    suspend fun updateTask(task: TaskEntity)
+
     /** 완료 상태 토글 */
     suspend fun toggleDone(id: Long, isDone: Boolean)
 

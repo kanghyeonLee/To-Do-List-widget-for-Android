@@ -3,6 +3,7 @@ package com.kanghyeon.todolist.data.local.dao
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
 import kotlinx.coroutines.flow.Flow
@@ -114,6 +115,10 @@ interface TaskDao {
      */
     @Upsert
     suspend fun upsert(task: TaskEntity): Long
+
+    /** 기존 할 일 수정 (id가 없으면 무시) */
+    @Update
+    suspend fun update(task: TaskEntity)
 
     /**
      * 완료 상태만 업데이트
