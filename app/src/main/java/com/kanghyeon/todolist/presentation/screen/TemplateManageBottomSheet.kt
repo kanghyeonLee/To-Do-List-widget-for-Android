@@ -1,8 +1,11 @@
 package com.kanghyeon.todolist.presentation.screen
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -70,6 +73,9 @@ import com.kanghyeon.todolist.presentation.theme.PriorityLow
 import com.kanghyeon.todolist.presentation.theme.PriorityMedium
 import com.kanghyeon.todolist.presentation.viewmodel.TaskViewModel
 
+// 취소 버튼에 사용할 빨간색
+private val CancelRed = Color(0xFFEF4444)
+
 // ══════════════════════════════════════════════════════════════════
 // 루트 BottomSheet — 리스트 ↔ 상세 두 화면을 AnimatedContent로 전환
 // ══════════════════════════════════════════════════════════════════
@@ -80,8 +86,8 @@ fun TemplateManageBottomSheet(
     viewModel: TaskViewModel,
     onDismiss: () -> Unit,
 ) {
-    val sheetState    = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val groups        by viewModel.templateGroups.collectAsStateWithLifecycle()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val groups     by viewModel.templateGroups.collectAsStateWithLifecycle()
 
     // null = 그룹 목록 화면, non-null = 해당 그룹 상세 화면
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
@@ -109,14 +115,12 @@ fun TemplateManageBottomSheet(
 
         // 두 화면 전환 (슬라이드 애니메이션)
         AnimatedContent(
-            targetState  = selectedGroupId,
+            targetState = selectedGroupId,
             transitionSpec = {
                 if (targetState != null) {
-                    // 리스트 → 상세: 오른쪽에서 진입
                     (slideInHorizontally { it } + fadeIn()) togetherWith
                         (slideOutHorizontally { -it } + fadeOut())
                 } else {
-                    // 상세 → 리스트: 왼쪽에서 진입
                     (slideInHorizontally { -it } + fadeIn()) togetherWith
                         (slideOutHorizontally { it } + fadeOut())
                 }
@@ -124,29 +128,26 @@ fun TemplateManageBottomSheet(
             label = "template_nav",
         ) { groupId ->
             if (groupId == null) {
-                // ── 그룹 목록 화면 ────────────────────────────────
                 GroupListScreen(
                     groups        = groups,
                     onGroupClick  = { selectedGroupId = it.id },
-                    onToggle      = { id, active ->
-                        viewModel.toggleTemplateGroupActive(id, active)
-                    },
+                    onToggle      = { id, active -> viewModel.toggleTemplateGroupActive(id, active) },
                     onDeleteGroup = { viewModel.deleteTemplateGroup(it) },
                     onAddGroup    = { viewModel.addTemplateGroup(it) },
                     onDismiss     = onDismiss,
                 )
             } else {
-                // ── 그룹 상세 화면 ────────────────────────────────
                 val groupWithTasks = groups.firstOrNull { it.group.id == groupId }
                 GroupDetailScreen(
                     groupWithTasks  = groupWithTasks,
                     onBack          = { selectedGroupId = null },
+                    onRenameGroup   = { name -> viewModel.renameTemplateGroup(groupId, name) },
                     onAddTask       = { title, desc, priority ->
                         viewModel.addTemplateTask(
-                            groupId         = groupId,
-                            title           = title,
-                            description     = desc.ifBlank { null },
-                            priority        = priority,
+                            groupId     = groupId,
+                            title       = title,
+                            description = desc.ifBlank { null },
+                            priority    = priority,
                         )
                     },
                     onDeleteTask    = { viewModel.deleteTemplateTask(it) },
@@ -234,7 +235,9 @@ private fun GroupListScreen(
                 painter            = painterResource(R.drawable.rotate_ccw),
                 contentDescription = null,
                 tint               = MaterialTheme.colorScheme.primary,
-                modifier           = Modifier.size(16.dp).padding(top = 2.dp),
+                modifier           = Modifier
+                    .size(16.dp)
+                    .padding(top = 2.dp),
             )
             Text(
                 text  = "활성화된 템플릿의 할 일이 매일 앱을 열 때 자동으로 추가됩니다. 하루 한 번만 생성됩니다.",
@@ -302,7 +305,6 @@ private fun GroupCard(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 그룹 아이콘
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -322,7 +324,6 @@ private fun GroupCard(
             )
         }
 
-        // 이름 + 할 일 수
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text  = group.name,
@@ -337,24 +338,19 @@ private fun GroupCard(
             )
         }
 
-        // 활성화 스위치
         Switch(
             checked         = group.isActive,
             onCheckedChange = onToggle,
             colors          = SwitchDefaults.colors(
-                checkedThumbColor       = Color.White,
-                checkedTrackColor       = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor     = Color.White,
-                uncheckedTrackColor     = Color(0xFFD1D5DB),
-                uncheckedBorderColor    = Color(0xFFD1D5DB),
+                checkedThumbColor    = Color.White,
+                checkedTrackColor    = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor  = Color.White,
+                uncheckedTrackColor  = Color(0xFFD1D5DB),
+                uncheckedBorderColor = Color(0xFFD1D5DB),
             ),
         )
 
-        // 삭제 버튼
-        IconButton(
-            onClick  = onDelete,
-            modifier = Modifier.size(36.dp),
-        ) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
             Icon(
                 painter            = painterResource(R.drawable.trash_2),
                 contentDescription = "그룹 삭제",
@@ -401,6 +397,8 @@ private fun EmptyGroupPlaceholder() {
 }
 
 // ── 새 그룹 추가 폼 ───────────────────────────────────────────────
+// · + 아이콘 없음
+// · 취소 상태 → 빨간 배경
 
 @Composable
 private fun AddGroupForm(onAdd: (String) -> Unit) {
@@ -410,13 +408,13 @@ private fun AddGroupForm(onAdd: (String) -> Unit) {
 
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         // 토글 버튼
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    if (expanded) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                    RoundedCornerShape(12.dp),
+                    color = if (expanded) CancelRed
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 .clickable(
                     onClick           = { expanded = !expanded },
@@ -424,39 +422,49 @@ private fun AddGroupForm(onAdd: (String) -> Unit) {
                     interactionSource = remember { MutableInteractionSource() },
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment     = Alignment.CenterVertically,
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter            = painterResource(R.drawable.plus),
-                contentDescription = null,
-                tint               = if (expanded) Color.White else MaterialTheme.colorScheme.primary,
-                modifier           = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
             Text(
                 text  = if (expanded) "취소" else "새 그룹 만들기",
                 style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight = FontWeight.SemiBold,
-                    color      = if (expanded) Color.White else MaterialTheme.colorScheme.primary,
+                    color      = if (expanded) Color.White
+                                 else MaterialTheme.colorScheme.primary,
                 ),
             )
         }
 
-        if (expanded) {
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value         = name,
-                onValueChange = { name = it },
-                placeholder   = { Text("그룹 이름 (예: 출근 루틴)", color = Color(0xFFBCC1CA)) },
-                modifier      = Modifier.fillMaxWidth(),
-                singleLine    = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction      = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
+        AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
+            Column(modifier = Modifier.padding(top = 10.dp)) {
+                OutlinedTextField(
+                    value         = name,
+                    onValueChange = { name = it },
+                    placeholder   = { Text("그룹 이름 (예: 출근 루틴)", color = Color(0xFFBCC1CA)) },
+                    modifier      = Modifier.fillMaxWidth(),
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction      = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (name.isNotBlank()) {
+                                onAdd(name)
+                                name     = ""
+                                expanded = false
+                                focusManager.clearFocus()
+                            }
+                        },
+                    ),
+                    shape  = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = CardBorderColor,
+                    ),
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
                         if (name.isNotBlank()) {
                             onAdd(name)
                             name     = ""
@@ -464,50 +472,42 @@ private fun AddGroupForm(onAdd: (String) -> Unit) {
                             focusManager.clearFocus()
                         }
                     },
-                ),
-                shape  = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = CardBorderColor,
-                ),
-            )
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick  = {
-                    if (name.isNotBlank()) {
-                        onAdd(name)
-                        name     = ""
-                        expanded = false
-                        focusManager.clearFocus()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape    = RoundedCornerShape(12.dp),
-                colors   = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                ),
-                enabled  = name.isNotBlank(),
-            ) {
-                Text(
-                    text  = "그룹 생성",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                )
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(12.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    enabled  = name.isNotBlank(),
+                ) {
+                    Text(
+                        text  = "그룹 생성",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
             }
         }
     }
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 화면 2 — 그룹 상세 (할 일 목록 + 추가 폼)
+// 화면 2 — 그룹 상세 (이름 인라인 편집 + 할 일 목록 + 추가 폼)
 // ══════════════════════════════════════════════════════════════════
 
 @Composable
 private fun GroupDetailScreen(
     groupWithTasks: RoutineTemplateGroupWithTasks?,
     onBack:         () -> Unit,
+    onRenameGroup:  (newName: String) -> Unit,
     onAddTask:      (title: String, description: String, priority: Int) -> Unit,
     onDeleteTask:   (id: Long) -> Unit,
 ) {
+    // 이름 편집 상태
+    var isEditingName by remember { mutableStateOf(false) }
+    var editingName   by remember(groupWithTasks?.group?.name) {
+        mutableStateOf(groupWithTasks?.group?.name ?: "")
+    }
+    val focusManager  = LocalFocusManager.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -515,44 +515,126 @@ private fun GroupDetailScreen(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
     ) {
-        // 헤더 (뒤로 가기 + 그룹명)
+        // ── 헤더 ──────────────────────────────────────────────────
         Row(
             modifier          = Modifier
                 .fillMaxWidth()
-                .padding(start = 4.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
+                .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
+            // 왼쪽: 뒤로 가기 (X 아이콘)
+            IconButton(onClick = {
+                isEditingName = false
+                onBack()
+            }) {
                 Icon(
-                    painter            = painterResource(R.drawable.rotate_ccw),
+                    painter            = painterResource(R.drawable.x),
                     contentDescription = "뒤로",
-                    tint               = MaterialTheme.colorScheme.primary,
+                    tint               = Color(0xFF6B7280),
                     modifier           = Modifier.size(20.dp),
                 )
             }
+
             Spacer(Modifier.width(4.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text  = groupWithTasks?.group?.name ?: "",
-                    style = MaterialTheme.typography.titleLarge.copy(
+
+            // 가운데: 그룹명 (일반 표시 or 인라인 편집)
+            if (isEditingName) {
+                OutlinedTextField(
+                    value         = editingName,
+                    onValueChange = { editingName = it },
+                    modifier      = Modifier.weight(1f),
+                    singleLine    = true,
+                    textStyle     = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color      = Color(0xFF1D1D1F),
                     ),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction      = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (editingName.isNotBlank()) {
+                                onRenameGroup(editingName)
+                            }
+                            isEditingName = false
+                            focusManager.clearFocus()
+                        },
+                    ),
+                    shape  = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = CardBorderColor,
+                    ),
                 )
-                Text(
-                    text  = "루틴 템플릿 편집",
-                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF9CA3AF)),
-                )
+            } else {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text  = groupWithTasks?.group?.name ?: "",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color      = Color(0xFF1D1D1F),
+                        ),
+                    )
+                    Text(
+                        text  = "루틴 템플릿 편집",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF9CA3AF)),
+                    )
+                }
+            }
+
+            // 오른쪽: 편집 중이면 확인/취소, 아니면 연필
+            if (isEditingName) {
+                // 확인
+                IconButton(
+                    onClick = {
+                        if (editingName.isNotBlank()) onRenameGroup(editingName)
+                        isEditingName = false
+                        focusManager.clearFocus()
+                    },
+                ) {
+                    Icon(
+                        painter            = painterResource(R.drawable.check),
+                        contentDescription = "이름 저장",
+                        tint               = MaterialTheme.colorScheme.primary,
+                        modifier           = Modifier.size(20.dp),
+                    )
+                }
+                // 취소
+                IconButton(
+                    onClick = {
+                        editingName   = groupWithTasks?.group?.name ?: ""
+                        isEditingName = false
+                        focusManager.clearFocus()
+                    },
+                ) {
+                    Icon(
+                        painter            = painterResource(R.drawable.x),
+                        contentDescription = "이름 편집 취소",
+                        tint               = CancelRed,
+                        modifier           = Modifier.size(20.dp),
+                    )
+                }
+            } else {
+                // 연필 — 이름 편집 진입
+                IconButton(onClick = { isEditingName = true }) {
+                    Icon(
+                        painter            = painterResource(R.drawable.pencil),
+                        contentDescription = "그룹 이름 편집",
+                        tint               = Color(0xFF6B7280),
+                        modifier           = Modifier.size(18.dp),
+                    )
+                }
             }
         }
 
         HorizontalDivider(
-            modifier  = Modifier.padding(horizontal = 20.dp),
-            color     = CardBorderColor,
+            modifier = Modifier.padding(horizontal = 20.dp),
+            color    = CardBorderColor,
         )
         Spacer(Modifier.height(12.dp))
 
-        // 할 일 목록
+        // ── 할 일 목록 ────────────────────────────────────────────
         val tasks = groupWithTasks?.tasks ?: emptyList()
         if (tasks.isEmpty()) {
             Box(
@@ -602,10 +684,9 @@ private fun GroupDetailScreen(
         HorizontalDivider(color = CardBorderColor)
         Spacer(Modifier.height(16.dp))
 
-        // 할 일 추가 폼
+        // ── 할 일 추가 폼 ─────────────────────────────────────────
         AddTemplateTaskForm(
-            groupId = groupWithTasks?.group?.id ?: 0L,
-            onSave  = { title, desc, priority -> onAddTask(title, desc, priority) },
+            onSave = { title, desc, priority -> onAddTask(title, desc, priority) },
         )
     }
 }
@@ -632,7 +713,6 @@ private fun TemplateTaskItem(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // 우선순위 도트
         Box(
             modifier = Modifier
                 .size(8.dp)
@@ -656,7 +736,6 @@ private fun TemplateTaskItem(
             }
         }
 
-        // 우선순위 뱃지
         Box(
             modifier = Modifier
                 .background(accentColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
@@ -676,7 +755,6 @@ private fun TemplateTaskItem(
             )
         }
 
-        // 삭제 버튼
         IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
             Icon(
                 painter            = painterResource(R.drawable.trash_2),
@@ -689,11 +767,12 @@ private fun TemplateTaskItem(
 }
 
 // ── 할 일 추가 폼 ─────────────────────────────────────────────────
+// · + 아이콘 없음
+// · 취소 상태 → 빨간 배경
 
 @Composable
 private fun AddTemplateTaskForm(
-    groupId: Long,
-    onSave:  (title: String, description: String, priority: Int) -> Unit,
+    onSave: (title: String, description: String, priority: Int) -> Unit,
 ) {
     var title        by remember { mutableStateOf("") }
     var description  by remember { mutableStateOf("") }
@@ -703,13 +782,13 @@ private fun AddTemplateTaskForm(
 
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         // 토글 버튼
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    if (expanded) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                    RoundedCornerShape(12.dp),
+                    color = if (expanded) CancelRed
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 .clickable(
                     onClick           = { expanded = !expanded },
@@ -717,139 +796,132 @@ private fun AddTemplateTaskForm(
                     interactionSource = remember { MutableInteractionSource() },
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment     = Alignment.CenterVertically,
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter            = painterResource(R.drawable.plus),
-                contentDescription = null,
-                tint               = if (expanded) Color.White else MaterialTheme.colorScheme.primary,
-                modifier           = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
             Text(
                 text  = if (expanded) "취소" else "할 일 추가",
                 style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight = FontWeight.SemiBold,
-                    color      = if (expanded) Color.White else MaterialTheme.colorScheme.primary,
+                    color      = if (expanded) Color.White
+                                 else MaterialTheme.colorScheme.primary,
                 ),
             )
         }
 
-        if (expanded) {
-            Spacer(Modifier.height(10.dp))
+        AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
+            Column(modifier = Modifier.padding(top = 10.dp)) {
+                // 제목
+                OutlinedTextField(
+                    value         = title,
+                    onValueChange = { title = it },
+                    placeholder   = { Text("할 일 제목 (필수)", color = Color(0xFFBCC1CA)) },
+                    modifier      = Modifier.fillMaxWidth(),
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction      = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                    ),
+                    shape  = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = CardBorderColor,
+                    ),
+                )
 
-            // 제목
-            OutlinedTextField(
-                value         = title,
-                onValueChange = { title = it },
-                placeholder   = { Text("할 일 제목 (필수)", color = Color(0xFFBCC1CA)) },
-                modifier      = Modifier.fillMaxWidth(),
-                singleLine    = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction      = ImeAction.Next,
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                ),
-                shape  = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = CardBorderColor,
-                ),
-            )
+                Spacer(Modifier.height(8.dp))
 
-            Spacer(Modifier.height(8.dp))
+                // 메모 (선택)
+                OutlinedTextField(
+                    value         = description,
+                    onValueChange = { description = it },
+                    placeholder   = { Text("메모 (선택)", color = Color(0xFFBCC1CA)) },
+                    modifier      = Modifier.fillMaxWidth(),
+                    singleLine    = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction      = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() },
+                    ),
+                    shape  = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = CardBorderColor,
+                    ),
+                )
 
-            // 메모 (선택)
-            OutlinedTextField(
-                value         = description,
-                onValueChange = { description = it },
-                placeholder   = { Text("메모 (선택)", color = Color(0xFFBCC1CA)) },
-                modifier      = Modifier.fillMaxWidth(),
-                singleLine    = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction      = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() },
-                ),
-                shape  = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = CardBorderColor,
-                ),
-            )
+                Spacer(Modifier.height(8.dp))
 
-            Spacer(Modifier.height(8.dp))
-
-            // 우선순위 선택
-            val priorityOptions = listOf(
-                Triple(Priority.HIGH.value,   "높음", PriorityHigh),
-                Triple(Priority.MEDIUM.value, "보통", PriorityMedium),
-                Triple(Priority.LOW.value,    "낮음", PriorityLow),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                priorityOptions.forEach { (value, label, color) ->
-                    val isSelected = priority == value
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                if (isSelected) color else Color.Transparent,
-                                RoundedCornerShape(10.dp),
+                // 우선순위 선택
+                val priorityOptions = listOf(
+                    Triple(Priority.HIGH.value,   "높음", PriorityHigh),
+                    Triple(Priority.MEDIUM.value, "보통", PriorityMedium),
+                    Triple(Priority.LOW.value,    "낮음", PriorityLow),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    priorityOptions.forEach { (value, label, color) ->
+                        val isSelected = priority == value
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    if (isSelected) color else Color.Transparent,
+                                    RoundedCornerShape(10.dp),
+                                )
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isSelected) color else color.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(10.dp),
+                                )
+                                .clickable(
+                                    onClick           = { priority = value },
+                                    indication        = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                )
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text  = label,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color      = if (isSelected) Color.White else color,
+                                ),
                             )
-                            .border(
-                                width = 1.5.dp,
-                                color = if (isSelected) color else color.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(10.dp),
-                            )
-                            .clickable(
-                                onClick           = { priority = value },
-                                indication        = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            )
-                            .padding(vertical = 9.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text  = label,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color      = if (isSelected) Color.White else color,
-                            ),
-                        )
+                        }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-            // 저장
-            Button(
-                onClick  = {
-                    if (title.isNotBlank()) {
-                        onSave(title, description, priority)
-                        title       = ""
-                        description = ""
-                        priority    = Priority.MEDIUM.value
-                        expanded    = false
-                        focusManager.clearFocus()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape    = RoundedCornerShape(12.dp),
-                colors   = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                ),
-                enabled  = title.isNotBlank(),
-            ) {
-                Text(
-                    text  = "할 일 저장",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                )
+                // 저장
+                Button(
+                    onClick = {
+                        if (title.isNotBlank()) {
+                            onSave(title, description, priority)
+                            title       = ""
+                            description = ""
+                            priority    = Priority.MEDIUM.value
+                            expanded    = false
+                            focusManager.clearFocus()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(12.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    enabled  = title.isNotBlank(),
+                ) {
+                    Text(
+                        text  = "할 일 저장",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
             }
         }
     }

@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -68,6 +69,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kanghyeon.todolist.R
@@ -147,6 +149,27 @@ fun MainScreen(
         }
     }
 
+    // ── 시스템 뒤로 가기(Back Press) 통합 핸들링 ──────────────────────
+    val isAnyOverlayOpen = showTrashScreen || showTemplateManage || showBottomSheet || 
+                           showSyncConfirm || showBulkDeleteConfirm || editingTask != null
+
+    BackHandler(enabled = isAnyOverlayOpen) {
+        when {
+            showSyncConfirm -> showSyncConfirm = false
+            showBulkDeleteConfirm -> showBulkDeleteConfirm = false
+            
+           
+            showTrashScreen -> showTrashScreen = false
+            showTemplateManage -> showTemplateManage = false
+            
+           
+            showBottomSheet || editingTask != null -> {
+                showBottomSheet = false
+                viewModel.setEditingTask(null)
+            }
+        }
+    }
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -161,7 +184,6 @@ fun MainScreen(
                     )
                 },
                 actions = {
-                    // 루틴 템플릿 관리
                     IconButton(onClick = { showTemplateManage = true }) {
                         Icon(
                             painter            = painterResource(R.drawable.layout_panel_top),
@@ -191,7 +213,6 @@ fun MainScreen(
                         }
                     }
 
-                    // 아카이브 탭에 항목이 있을 때만 일괄 삭제 버튼 표시
                     if (selectedTab == 1 && archiveTasks.isNotEmpty()) {
                         IconButton(onClick = { showBulkDeleteConfirm = true }) {
                             Icon(
@@ -674,6 +695,28 @@ private fun ArchiveContent(
                     utcTimeMillis <= System.currentTimeMillis() + 86_400_000L
             },
         )
+
+        // DatePicker 화이트 톤 색상 — 선택 강조색은 기존 인디고 유지
+        val dpColors = DatePickerDefaults.colors(
+            containerColor             = Color.White,
+            titleContentColor          = Color(0xFF6B7280),
+            headlineContentColor       = Color(0xFF1D1D1F),
+            weekdayContentColor        = Color(0xFF6B7280),
+            subheadContentColor        = Color(0xFF1D1D1F),
+            navigationContentColor     = Color(0xFF1D1D1F),
+            yearContentColor           = Color(0xFF1D1D1F),
+            currentYearContentColor    = MaterialTheme.colorScheme.primary,
+            selectedYearContentColor   = Color.White,
+            selectedYearContainerColor = MaterialTheme.colorScheme.primary,
+            dayContentColor            = Color(0xFF1D1D1F),
+            disabledDayContentColor    = Color(0xFFD1D5DB),
+            selectedDayContentColor    = Color.White,
+            selectedDayContainerColor  = MaterialTheme.colorScheme.primary,
+            todayContentColor          = MaterialTheme.colorScheme.primary,
+            todayDateBorderColor       = MaterialTheme.colorScheme.primary,
+            dividerColor               = Color(0xFFE5E7EB),
+        )
+
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -685,8 +728,10 @@ private fun ArchiveContent(
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) { Text("취소") }
             },
+            shape  = RoundedCornerShape(20.dp),
+            colors = dpColors,
         ) {
-            DatePicker(state = datePickerState)
+            DatePicker(state = datePickerState, colors = dpColors)
         }
     }
 
