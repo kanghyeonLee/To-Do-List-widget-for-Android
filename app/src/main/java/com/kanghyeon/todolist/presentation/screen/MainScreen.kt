@@ -323,7 +323,7 @@ private fun TodoContent(
                             tasks = tasks,
                             accentColor = meta.accent,
                             bgColor = MaterialTheme.colorScheme.surface,
-                            onToggleDone = { task -> viewModel.toggleDone(task.id, task.isDone) },
+                            onToggleDone = { task -> viewModel.toggleTaskCompletion(task) },
                             onDelete = { task -> viewModel.deleteTask(task) },
                             onEdit = { task -> onEdit(task) },
                             modifier = Modifier.animateItem(),
@@ -430,7 +430,7 @@ private fun ArchiveContent(
                 ) { task ->
                     TaskItem(
                         task         = task,
-                        onToggleDone = { viewModel.toggleDone(task.id, task.isDone) },
+                        onToggleDone = { viewModel.toggleTaskCompletion(task) },
                         onDelete     = { viewModel.deleteTask(task) },
                         modifier     = Modifier.animateItem(),
                     )

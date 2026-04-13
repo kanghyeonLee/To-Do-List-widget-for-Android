@@ -226,17 +226,29 @@ class TaskViewModel @Inject constructor(
     }
 
     /**
-     * 완료/미완료 토글
-     * @param id          변경할 Task의 ID
-     * @param currentDone 현재 완료 상태 (반전값으로 저장)
+     * 완료/미완료 토글 — Task 전체를 받아 알람까지 일괄 처리.
+     *
+     * - 완료 전환 (isDone false → true):
+     *   1. DB isDone = true, updatedAt 갱신 → Room Flow가 자동으로
+     *      activeTasks에서 제거, completedTasks/archiveTasks에 추가
+     *   2. 예약된 알람 취소
+     *
+     * - 미완료 복구 (isDone true → false):
+     *   1. DB isDone = false → 할 일 목록으로 즉시 복귀
+     *   2. dueDate가 현재+5분 이후면 알람 재예약
+     *      (AlarmScheduler.schedule 내부에서 과거 시각은 자동으로 무시)
      */
-    fun toggleDone(id: Long, currentDone: Boolean) {
+    fun toggleTaskCompletion(task: TaskEntity) {
         viewModelScope.launch {
-            val isDone = !currentDone
-            repository.toggleDone(id = id, isDone = isDone)
-            // 완료 시 알람 취소, 미완료 복구 시 재예약은 Task 전체 정보가 필요하므로
-            // 완료 전환만 취소 (미완료 복구는 사용자가 직접 날짜·알림을 다시 설정)
-            if (isDone) alarmScheduler.cancel(id)
+            val newDone = !task.isDone
+            repository.toggleDone(id = task.id, isDone = newDone)
+            if (newDone) {
+                // 완료: 알람 취소
+                alarmScheduler.cancel(task.id)
+            } else {
+                // 미완료 복구: dueDate가 미래면 알람 재예약
+                alarmScheduler.schedule(task.copy(isDone = false))
+            }
         }
     }
 
