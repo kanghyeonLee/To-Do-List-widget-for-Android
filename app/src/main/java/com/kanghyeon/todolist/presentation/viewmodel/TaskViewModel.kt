@@ -349,17 +349,23 @@ class TaskViewModel @Inject constructor(
     }
 
     /**
-     * 아카이브 탭에서 현재 선택된 날짜의 완료 항목만 삭제.
-     * 다른 날짜의 아카이브는 보존된다.
+     * 아카이브 탭에서 현재 선택된 날짜의 완료 항목을 휴지통으로 일괄 이동.
+     *
+     * [버그 수정] 기존 deleteCompletedByDate()는 영구 삭제였음.
+     * 각 항목에 softDeleteTask()를 적용하여 isDeleted = true 처리 후
+     * 휴지통에서 복구 또는 영구 삭제할 수 있도록 변경.
+     *
+     * archiveTasks.value는 현재 선택 날짜의 완료 항목 목록이므로
+     * 별도 날짜 범위 쿼리 없이 바로 사용 가능.
      */
     fun clearCompletedForSelectedDate() {
-        val startMs = _selectedArchiveDate.value
         viewModelScope.launch {
-            repository.deleteCompletedByDate(
-                startOfDay = startMs,
-                endOfDay   = startMs + DAY_MS - 1,
-            )
-            emitEvent(TaskEvent.ShowMessage("선택한 날의 완료 항목을 삭제했습니다."))
+            val tasks = archiveTasks.value
+            tasks.forEach { task ->
+                alarmScheduler.cancel(task.id)
+                repository.softDeleteTask(task.id)
+            }
+            emitEvent(TaskEvent.ShowMessage("${tasks.size}개 항목을 휴지통으로 이동했습니다."))
         }
     }
 

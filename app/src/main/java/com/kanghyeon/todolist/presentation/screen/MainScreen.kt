@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +22,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -53,10 +58,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
@@ -76,10 +81,21 @@ import com.kanghyeon.todolist.presentation.viewmodel.NewTaskDraft
 import com.kanghyeon.todolist.presentation.viewmodel.TaskEvent
 import com.kanghyeon.todolist.presentation.viewmodel.TaskUiState
 import com.kanghyeon.todolist.presentation.viewmodel.TaskViewModel
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+// ══════════════════════════════════════════════════════════════════
+// 우선순위 페이지 메타 — HorizontalPager 각 페이지 설명
+// ══════════════════════════════════════════════════════════════════
+
+private data class PriorityPageMeta(
+    val priority:    Priority,
+    val label:       String,
+    val accentColor: Color,
+)
 
 // ══════════════════════════════════════════════════════════════════
 // MainScreen — 루트 컴포저블
@@ -90,19 +106,22 @@ import java.util.Locale
 fun MainScreen(
     viewModel: TaskViewModel = hiltViewModel(),
 ) {
-    val uiState       by viewModel.uiState.collectAsStateWithLifecycle()
-    val archiveDate   by viewModel.selectedArchiveDate.collectAsStateWithLifecycle()
-    val archiveTasks  by viewModel.archiveTasks.collectAsStateWithLifecycle()
-    val editingTask   by viewModel.editingTask.collectAsStateWithLifecycle()
-    val newTaskDraft  by viewModel.newTaskDraft.collectAsStateWithLifecycle()
+    val uiState              by viewModel.uiState.collectAsStateWithLifecycle()
+    val archiveDate          by viewModel.selectedArchiveDate.collectAsStateWithLifecycle()
+    val archiveTasks         by viewModel.archiveTasks.collectAsStateWithLifecycle()
+    val editingTask          by viewModel.editingTask.collectAsStateWithLifecycle()
+    val newTaskDraft         by viewModel.newTaskDraft.collectAsStateWithLifecycle()
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    var showBottomSheet  by remember { mutableStateOf(false) }
-    var showTrashScreen  by remember { mutableStateOf(false) }
-    var selectedTab      by remember { mutableIntStateOf(0) }
+    val snackbarHostState    = remember { SnackbarHostState() }
+    var showBottomSheet      by remember { mutableStateOf(false) }
+    var showTrashScreen      by remember { mutableStateOf(false) }
+    var selectedTab          by remember { mutableIntStateOf(0) }
+    // 아카이브 일괄 삭제 확인 다이얼로그 표시 여부
+    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
+    // ── 일회성 이벤트 수집 ─────────────────────────────────────────
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -148,11 +167,12 @@ fun MainScreen(
                             modifier           = Modifier.size(22.dp),
                         )
                     }
+                    // 아카이브 탭에 항목이 있을 때만 일괄 삭제 버튼 표시
                     if (selectedTab == 1 && archiveTasks.isNotEmpty()) {
-                        IconButton(onClick = viewModel::clearCompletedForSelectedDate) {
+                        IconButton(onClick = { showBulkDeleteConfirm = true }) {
                             Icon(
                                 painter            = painterResource(R.drawable.trash_2),
-                                contentDescription = "이 날의 완료 항목 삭제",
+                                contentDescription = "이 날의 완료 항목 전체 휴지통 이동",
                                 tint               = MaterialTheme.colorScheme.error,
                                 modifier           = Modifier.size(22.dp),
                             )
@@ -161,9 +181,9 @@ fun MainScreen(
                 },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor        = MaterialTheme.colorScheme.surface,
+                    containerColor         = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor     = Color(0xFF1D1D1F),
+                    titleContentColor      = Color(0xFF1D1D1F),
                     actionIconContentColor = Color(0xFF6B7280),
                 ),
             )
@@ -189,19 +209,18 @@ fun MainScreen(
                 }
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost  = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
 
         Column(modifier = Modifier.padding(innerPadding)) {
 
-            // ── 탭: 할 일 / 아카이브 ─────────────────────────
+            // ── 탭: 할 일 / 아카이브 ─────────────────────────────
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor   = MaterialTheme.colorScheme.surface,
                 contentColor     = MaterialTheme.colorScheme.primary,
                 indicator        = { tabPositions ->
-                    // 2dp 얇은 라인 인디케이터 — 무거운 블록 제거
                     Box(
                         Modifier
                             .tabIndicatorOffset(tabPositions[selectedTab])
@@ -214,10 +233,7 @@ fun MainScreen(
                     )
                 },
                 divider = {
-                    HorizontalDivider(
-                        color     = CardBorderColor,
-                        thickness = 1.dp,
-                    )
+                    HorizontalDivider(color = CardBorderColor, thickness = 1.dp)
                 },
             ) {
                 Tab(
@@ -253,15 +269,75 @@ fun MainScreen(
                 )
             }
 
-            // ── 탭 콘텐츠 ────────────────────────────────────
+            // ── 탭 콘텐츠 ─────────────────────────────────────────
             when {
                 uiState.isLoading -> LoadingContent()
-                selectedTab == 0  -> TodoContent(uiState, viewModel, onEdit = { viewModel.setEditingTask(it) })
+                selectedTab == 0  -> TodoContent(
+                    uiState  = uiState,
+                    viewModel = viewModel,
+                    onEdit   = { viewModel.setEditingTask(it) },
+                )
                 else              -> ArchiveContent(archiveDate, archiveTasks, viewModel)
             }
         }
     }
 
+    // ── 아카이브 일괄 삭제 확인 다이얼로그 ────────────────────────
+    // [버그 수정] 즉시 영구 삭제 → 확인 후 휴지통 이동으로 변경
+    if (showBulkDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBulkDeleteConfirm = false },
+            icon = {
+                Icon(
+                    painter            = painterResource(R.drawable.trash_2),
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.error,
+                    modifier           = Modifier.size(28.dp),
+                )
+            },
+            title = {
+                Text(
+                    text  = "완료 항목 일괄 삭제",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color      = Color(0xFF1D1D1F),
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    text  = "이 날짜의 완료된 할 일을 모두\n휴지통으로 이동하시겠습니까?\n\n휴지통에서 복구하거나 영구 삭제할 수 있습니다.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color(0xFF6B7280),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearCompletedForSelectedDate()
+                        showBulkDeleteConfirm = false
+                    },
+                ) {
+                    Text(
+                        text  = "휴지통으로 이동",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkDeleteConfirm = false }) {
+                    Text("취소")
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+        )
+    }
+
+    // ── 휴지통 화면 ────────────────────────────────────────────────
     if (showTrashScreen) {
         TrashScreen(
             viewModel = viewModel,
@@ -269,22 +345,18 @@ fun MainScreen(
         )
     }
 
+    // ── 할 일 추가 / 수정 BottomSheet ──────────────────────────────
     if (showBottomSheet || editingTask != null) {
         val isNewTask = editingTask == null
         AddTaskBottomSheet(
             task          = editingTask,
-            // 수정 모드일 때는 draft 사용 안 함
             initialDraft  = if (isNewTask) newTaskDraft else NewTaskDraft(),
-            onDraftChange = { draft ->
-                if (isNewTask) viewModel.updateNewTaskDraft(draft)
-            },
-            onDismiss = {
-                // 스와이프/바깥 탭으로 닫기 → draft 유지
+            onDraftChange = { draft -> if (isNewTask) viewModel.updateNewTaskDraft(draft) },
+            onDismiss     = {
                 showBottomSheet = false
                 viewModel.setEditingTask(null)
             },
-            onCancel = {
-                // 취소 버튼 → draft 초기화
+            onCancel      = {
                 showBottomSheet = false
                 viewModel.setEditingTask(null)
                 if (isNewTask) viewModel.clearNewTaskDraft()
@@ -305,9 +377,21 @@ fun MainScreen(
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 탭 콘텐츠: 할 일 (미완료 priority 섹션)
+// 탭 콘텐츠: 할 일 — HorizontalPager (우선순위별 페이지)
 // ══════════════════════════════════════════════════════════════════
 
+/**
+ * 미완료 할 일을 우선순위별 페이지(높음·보통·낮음)로 나눠 표시.
+ *
+ * [구조]
+ * Column
+ *   ├─ ScreenSectionHeader ("오늘의 할 일")
+ *   ├─ PriorityTabBar  ← 현재 페이지와 양방향 연동
+ *   └─ HorizontalPager ← 스와이프로 페이지 전환
+ *       ├─ Page 0: HIGH  priority tasks  (또는 EmptyContent)
+ *       ├─ Page 1: MEDIUM priority tasks (또는 EmptyContent)
+ *       └─ Page 2: LOW   priority tasks  (또는 EmptyContent)
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TodoContent(
@@ -315,76 +399,171 @@ private fun TodoContent(
     viewModel: TaskViewModel,
     onEdit: (TaskEntity) -> Unit,
 ) {
-    if (uiState.activeTasks.isEmpty()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            ScreenSectionHeader(
-                title   = "오늘의 할 일",
-                iconRes = R.drawable.house,
-            )
+    // Pager 관련 상태 — 조건부 return 전에 호출해야 Compose 규칙 준수
+    val pages = remember {
+        listOf(
+            PriorityPageMeta(Priority.HIGH,   "높음", PriorityHigh),
+            PriorityPageMeta(Priority.MEDIUM, "보통", PriorityMedium),
+            PriorityPageMeta(Priority.LOW,    "낮음", PriorityLow),
+        )
+    }
+    val grouped    = uiState.activeTasks.groupBy { Priority.from(it.priority) }
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val scope      = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        ScreenSectionHeader(
+            title    = "오늘의 할 일",
+            iconRes  = R.drawable.house,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        if (uiState.activeTasks.isEmpty()) {
+            // 전체 빈 상태 — 모든 우선순위에 할 일 없음
             EmptyContent(
                 iconRes    = R.drawable.house,
                 message    = "현재 등록된 할 일이 없습니다",
                 subMessage = "아래 + 버튼을 눌러 첫 번째 할 일을 추가해 보세요.",
             )
-        }
-        return
-    }
-
-    val grouped = uiState.activeTasks.groupBy { Priority.from(it.priority) }
-
-    data class PriorityMeta(val label: String, val accent: Color)
-    val priorityMeta = mapOf(
-        Priority.HIGH   to PriorityMeta("높음", PriorityHigh),
-        Priority.MEDIUM to PriorityMeta("중간", PriorityMedium),
-        Priority.LOW    to PriorityMeta("낮음", PriorityLow),
-    )
-
-    LazyColumn(
-        modifier        = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding  = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        // 섹션 타이틀 헤더
-        item {
-            ScreenSectionHeader(
-                title   = "오늘의 할 일",
-                iconRes = R.drawable.house,
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+        } else {
+            // ── 우선순위 탭 바 ──────────────────────────────────
+            PriorityTabBar(
+                pages      = pages,
+                grouped    = grouped,
+                pagerState = pagerState,
+                onTabClick = { index ->
+                    scope.launch { pagerState.animateScrollToPage(index) }
+                },
             )
-        }
 
-        Priority.entries
-            .sortedByDescending { it.value }
-            .forEach { priority ->
-                val tasks = grouped[priority]
-                if (!tasks.isNullOrEmpty()) {
-                    val meta = priorityMeta.getValue(priority)
+            // ── 우선순위별 Pager ────────────────────────────────
+            HorizontalPager(
+                state    = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { pageIndex ->
+                val meta  = pages[pageIndex]
+                val tasks = grouped[meta.priority] ?: emptyList()
 
-                    stickyHeader(key = "priority_header_${priority.name}") {
-                        PrioritySectionHeader(
-                            label    = meta.label,
-                            count    = tasks.size,
-                            dotColor = meta.accent,
-                        )
+                if (tasks.isEmpty()) {
+                    EmptyContent(
+                        iconRes    = R.drawable.flag,
+                        message    = "'${meta.label}' 우선순위 할 일이 없습니다",
+                        subMessage = "다른 탭을 확인하거나 + 버튼으로 새 할 일을 추가해 보세요.",
+                    )
+                } else {
+                    LazyColumn(
+                        modifier            = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        contentPadding      = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item(key = "group_${meta.priority.name}") {
+                            PriorityGroupCard(
+                                tasks        = tasks,
+                                accentColor  = meta.accentColor,
+                                bgColor      = MaterialTheme.colorScheme.surface,
+                                onToggleDone = { task -> viewModel.toggleTaskCompletion(task) },
+                                onDelete     = { task -> viewModel.deleteTask(task) },
+                                onEdit       = { task -> onEdit(task) },
+                                modifier     = Modifier.animateItem(),
+                            )
+                        }
+                        item { Spacer(Modifier.height(80.dp)) }
                     }
+                }
+            }
+        }
+    }
+}
 
-                    item(key = "priority_card_${priority.name}") {
-                        PriorityGroupCard(
-                            tasks        = tasks,
-                            accentColor  = meta.accent,
-                            bgColor      = MaterialTheme.colorScheme.surface,
-                            onToggleDone = { task -> viewModel.toggleTaskCompletion(task) },
-                            onDelete     = { task -> viewModel.deleteTask(task) },
-                            onEdit       = { task -> onEdit(task) },
-                            modifier     = Modifier.animateItem(),
+// ══════════════════════════════════════════════════════════════════
+// PriorityTabBar — Pager와 양방향 연동되는 우선순위 칩 탭
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * 세 개의 우선순위 칩(높음·보통·낮음)을 가로로 배치.
+ *
+ * - 선택된 칩: 해당 우선순위 색으로 배경 채움 + 흰 텍스트
+ * - 미선택 칩: 투명 배경 + 1.5dp 색상 테두리 + 색상 텍스트
+ * - 할 일 개수 뱃지: 칩 안에 반투명 pill 형태로 표시
+ * - 칩 클릭 → pager.animateScrollToPage, 스와이프 → 칩 자동 전환
+ */
+@Composable
+private fun PriorityTabBar(
+    pages:      List<PriorityPageMeta>,
+    grouped:    Map<Priority, List<TaskEntity>>,
+    pagerState: PagerState,
+    onTabClick: (Int) -> Unit,
+    modifier:   Modifier = Modifier,
+) {
+    Row(
+        modifier            = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        pages.forEachIndexed { index, meta ->
+            val isSelected = pagerState.currentPage == index
+            val count      = grouped[meta.priority]?.size ?: 0
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(
+                        color = if (isSelected) meta.accentColor else Color.Transparent,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .border(
+                        width = 1.5.dp,
+                        color = if (isSelected) meta.accentColor
+                                else meta.accentColor.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .clickable(
+                        onClick           = { onTabClick(index) },
+                        indication        = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    )
+                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text  = meta.label,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color      = if (isSelected) Color.White else meta.accentColor,
+                    ),
+                )
+                // 할 일 개수 뱃지
+                if (count > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = if (isSelected) Color.White.copy(alpha = 0.25f)
+                                        else meta.accentColor.copy(alpha = 0.12f),
+                                shape = CircleShape,
+                            )
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text  = count.toString(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color      = if (isSelected) Color.White else meta.accentColor,
+                            ),
                         )
                     }
                 }
             }
-
-        item { Spacer(Modifier.height(80.dp)) }
+        }
     }
 }
 
@@ -395,9 +574,9 @@ private fun TodoContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ArchiveContent(
-    archiveDate: Long,
+    archiveDate:  Long,
     archiveTasks: List<TaskEntity>,
-    viewModel: TaskViewModel,
+    viewModel:    TaskViewModel,
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -434,14 +613,13 @@ private fun ArchiveContent(
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // ── 아카이브 섹션 타이틀 ─────────────────────────────
         ScreenSectionHeader(
-            title   = "아카이브",
-            iconRes = R.drawable.calendar_check,
+            title    = "아카이브",
+            iconRes  = R.drawable.calendar_check,
             modifier = Modifier.padding(top = 8.dp),
         )
 
-        // ── 날짜 선택 버튼 — 미니멀 카드 스타일 ──────────────
+        // ── 날짜 선택 버튼 — 미니멀 카드 스타일 ─────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -450,7 +628,7 @@ private fun ArchiveContent(
                 .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
                 .clickable { showDatePicker = true }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
             Icon(
@@ -470,16 +648,14 @@ private fun ArchiveContent(
             Spacer(Modifier.width(6.dp))
             Text(
                 text  = "▼",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = Color(0xFF6B7280),
-                ),
+                style = MaterialTheme.typography.labelSmall.copy(color = Color(0xFF6B7280)),
             )
         }
 
         Spacer(Modifier.height(8.dp))
         HorizontalDivider(color = CardBorderColor, thickness = 1.dp)
 
-        // ── 해당 날짜 완료 목록 ───────────────────────────────
+        // ── 해당 날짜 완료 목록 ──────────────────────────────────
         if (archiveTasks.isEmpty()) {
             EmptyContent(
                 iconRes    = R.drawable.calendar_check,
@@ -513,21 +689,17 @@ private fun ArchiveContent(
 // 공통 서브 컴포저블
 // ══════════════════════════════════════════════════════════════════
 
-/**
- * 탭 콘텐츠 최상단에 배치하는 큰 타이틀 헤더.
- * 아이콘 + 굵은 타이틀 텍스트 구성.
- */
 @Composable
 private fun ScreenSectionHeader(
-    title: String,
-    iconRes: Int,
+    title:    String,
+    iconRes:  Int,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
@@ -556,46 +728,6 @@ private fun ScreenSectionHeader(
     }
 }
 
-/**
- * 중요도 섹션용 sticky 헤더.
- * 스크롤 시 상단에 고정되므로 [MaterialTheme.colorScheme.background] 배경으로 가림막 처리.
- */
-@Composable
-private fun PrioritySectionHeader(
-    label: String,
-    count: Int,
-    dotColor: Color,
-) {
-    Row(
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(vertical = 6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(dotColor),
-        )
-        Text(
-            text  = label,
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                color      = dotColor,
-            ),
-        )
-        Text(
-            text  = count.toString(),
-            style = MaterialTheme.typography.titleSmall.copy(
-                color = Color(0xFF6B7280),
-            ),
-        )
-    }
-}
-
 @Composable
 private fun LoadingContent() {
     Box(
@@ -606,21 +738,13 @@ private fun LoadingContent() {
     }
 }
 
-/**
- * 리스트가 비었을 때 표시되는 Empty State 컴포저블.
- * 아이콘을 연한 원형 배경 위에 올려 시각적 완성도를 높임.
- */
 @Composable
 private fun EmptyContent(
-    iconRes: Int,
-    message: String,
+    iconRes:    Int,
+    message:    String,
     subMessage: String,
 ) {
-    AnimatedVisibility(
-        visible = true,
-        enter   = fadeIn(),
-        exit    = fadeOut(),
-    ) {
+    AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
         Box(
             modifier         = Modifier
                 .fillMaxSize()
@@ -631,7 +755,6 @@ private fun EmptyContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                // 아이콘을 감싸는 연한 원형 배경
                 Box(
                     modifier = Modifier
                         .size(88.dp)
@@ -648,9 +771,7 @@ private fun EmptyContent(
                         tint               = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
                     )
                 }
-
                 Spacer(Modifier.height(4.dp))
-
                 Text(
                     text  = message,
                     style = MaterialTheme.typography.titleMedium.copy(
@@ -661,9 +782,7 @@ private fun EmptyContent(
                 )
                 Text(
                     text      = subMessage,
-                    style     = MaterialTheme.typography.bodySmall.copy(
-                        color = Color(0xFF6B7280),
-                    ),
+                    style     = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF6B7280)),
                     textAlign = TextAlign.Center,
                 )
             }
