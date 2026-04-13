@@ -55,6 +55,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import com.kanghyeon.todolist.data.local.entity.Priority
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
 import com.kanghyeon.todolist.presentation.theme.PriorityHigh
@@ -130,9 +133,6 @@ fun AddTaskBottomSheet(
     // 시간이 없으면 알림도 초기화
     if (selectedTime == null) reminderMinutes = null
 
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
     fun submit() {
         if (title.isBlank()) { titleError = true; return }
         if (isTooSoon) return
@@ -192,6 +192,7 @@ fun AddTaskBottomSheet(
             },
         )
     }
+    val focusManager = LocalFocusManager.current
 
     // ── BottomSheet ───────────────────────────────────────────
     ModalBottomSheet(
@@ -220,7 +221,12 @@ fun AddTaskBottomSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .imePadding()
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        focusManager.clearFocus()
+                    })
+                },
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // ── 헤더 ─────────────────────────────────────────
@@ -258,7 +264,6 @@ fun AddTaskBottomSheet(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(focusRequester),
             )
 
             // ── 메모 입력 (선택) ──────────────────────────────
