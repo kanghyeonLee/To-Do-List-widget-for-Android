@@ -13,6 +13,10 @@ import com.kanghyeon.todolist.R
 import com.kanghyeon.todolist.data.local.entity.Priority
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
 import com.kanghyeon.todolist.receiver.TaskActionReceiver
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * 알림 채널 생성 및 알림 빌드 헬퍼
@@ -29,8 +33,12 @@ import com.kanghyeon.todolist.receiver.TaskActionReceiver
  */
 object NotificationHelper {
 
-    const val CHANNEL_ID      = "todo_persistent_channel"
-    const val NOTIFICATION_ID = 1001
+    const val CHANNEL_ID          = "todo_persistent_channel"
+    const val NOTIFICATION_ID     = 1001
+
+    const val REMINDER_CHANNEL_ID = "todo_reminder_channel"
+    // 알람 알림 ID = 10000 + taskId.toInt() (지속 알림과 충돌 방지)
+    private const val REMINDER_NOTIFICATION_BASE = 10_000
 
     // 알림에 표시할 최대 Task 개수
     private const val MAX_VISIBLE_TASKS = 3
@@ -90,7 +98,7 @@ object NotificationHelper {
     // ──────────────────────────────────────────────────────
 
     /**
-     * 알림 채널 생성 (API 26+)
+     * 지속 알림 채널 생성 (API 26+)
      * 이미 존재하면 시스템이 무시하므로 중복 호출 안전.
      * Application.onCreate()에서 한 번만 호출하면 된다.
      */
@@ -107,6 +115,64 @@ object NotificationHelper {
 
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
+    }
+
+    /**
+     * 알림 알람 채널 생성 (IMPORTANCE_HIGH → Heads-up 팝업)
+     * Application.onCreate()에서 한 번만 호출하면 된다.
+     */
+    fun createReminderChannel(context: Context) {
+        val channel = NotificationChannel(
+            REMINDER_CHANNEL_ID,
+            "마감 사전 알림",
+            NotificationManager.IMPORTANCE_HIGH,   // Heads-up 팝업
+        ).apply {
+            description = "마감 시간 전에 할 일을 미리 알려드립니다."
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
+
+    /**
+     * 마감 사전 알림 표시.
+     * TodoAlarmReceiver.onReceive()에서 호출된다.
+     *
+     * @param taskId  알림 ID 생성에 사용 (REMINDER_NOTIFICATION_BASE + taskId)
+     * @param title   할 일 제목
+     * @param dueDate 마감 epoch ms (포맷팅용, null 허용)
+     */
+    fun showReminderNotification(
+        context: Context,
+        taskId: Long,
+        title: String,
+        dueDate: Long?,
+    ) {
+        val contentText = if (dueDate != null) {
+            val time = Instant.ofEpochMilli(dueDate)
+                .atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREA))
+            "마감: $time"
+        } else {
+            "마감이 다가왔습니다."
+        }
+
+        val contentIntent = buildLaunchIntent(context)
+
+        val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_todo_notification)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.notify(REMINDER_NOTIFICATION_BASE + taskId.toInt(), notification)
     }
 
     // ──────────────────────────────────────────────────────
@@ -242,7 +308,9 @@ object NotificationHelper {
         return views
     }
 
-    private fun buildContentIntent(context: Context): PendingIntent {
+    private fun buildContentIntent(context: Context): PendingIntent = buildLaunchIntent(context)
+
+    private fun buildLaunchIntent(context: Context): PendingIntent {
         // MainActivity로 이동 (아직 생성 전이면 패키지 내 임시 인텐트 사용)
         val intent = context.packageManager
             .getLaunchIntentForPackage(context.packageName)

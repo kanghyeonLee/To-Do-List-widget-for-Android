@@ -9,10 +9,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -20,11 +23,14 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,77 +47,120 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.kanghyeon.todolist.data.local.entity.Priority
+import com.kanghyeon.todolist.data.local.entity.TaskEntity
 import com.kanghyeon.todolist.presentation.theme.PriorityHigh
 import com.kanghyeon.todolist.presentation.theme.PriorityLow
 import com.kanghyeon.todolist.presentation.theme.PriorityMedium
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
- * 할 일 추가 ModalBottomSheet
+ * 할 일 추가/수정 ModalBottomSheet
  *
- * [사용 흐름]
- * FAB 클릭 → showBottomSheet=true → AddTaskBottomSheet 표시
- * → 사용자 입력 → "추가" 버튼 → onAdd 콜백 → ViewModel.addTask()
+ * @param task  null = 추가 모드, non-null = 수정 모드 (기존 데이터 pre-populate)
+ * @param onSave 저장 콜백
  *
- * [skipPartiallyExpanded]
- * true로 설정해 키보드 올라올 때 시트가 반쯤 열리는 상태를 건너뜀.
- * imePadding()과 함께 사용해 키보드가 입력 필드를 가리지 않게 처리.
+ * [마감 시간]
+ * 날짜는 오늘 고정, 시간만 TimePicker로 선택 → dueDate (epoch ms)
+ *
+ * [유효성]
+ * selectedTime 기준 dueDate < 현재+5분이면 저장 버튼 비활성화 + 에러 메시지 노출
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTaskBottomSheet(
     onDismiss: () -> Unit,
-    onAdd: (
+    onSave: (
         title: String,
         description: String?,
         priority: Int,
         dueDate: Long?,
         showOnLockScreen: Boolean,
+        reminderMinutes: Int?,
     ) -> Unit,
+    task: TaskEntity? = null,
 ) {
+    val isEditMode = task != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
-    // ── 입력 상태 ─────────────────────────────────────────────
-    var title          by remember { mutableStateOf("") }
-    var description    by remember { mutableStateOf("") }
-    var selectedPriority by remember { mutableIntStateOf(Priority.MEDIUM.value) }
-    var dueTodayChecked  by remember { mutableStateOf(false) }
-    var showOnLockScreen by remember { mutableStateOf(true) }
-    var titleError     by remember { mutableStateOf(false) }
+    // 수정 모드일 때 기존 dueDate에서 시간 추출
+    val initialTime = remember {
+        task?.dueDate?.let { ms ->
+            val lt = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalTime()
+            LocalTime.of(lt.hour, lt.minute)
+        }
+    }
 
-    // 시트가 열리면 제목 필드에 자동 포커스
+    var title            by remember { mutableStateOf(task?.title ?: "") }
+    var description      by remember { mutableStateOf(task?.description ?: "") }
+    var selectedPriority by remember { mutableIntStateOf(task?.priority ?: Priority.MEDIUM.value) }
+    var showOnLockScreen by remember { mutableStateOf(task?.showOnLockScreen ?: true) }
+    var titleError       by remember { mutableStateOf(false) }
+    var selectedTime     by remember { mutableStateOf<LocalTime?>(initialTime) }
+    var reminderMinutes  by remember { mutableStateOf<Int?>(task?.reminderMinutes) }
+    var showTimePicker   by remember { mutableStateOf(false) }
+
+    // 마감일 = 오늘 + 선택된 시간
+    val dueDate: Long? = selectedTime?.let { time ->
+        LocalDate.now()
+            .atTime(time)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+    }
+
+    // 현재+5분 유효성 검사
+    val isTooSoon = dueDate != null && dueDate < System.currentTimeMillis() + 5 * 60_000L
+
+    // 시간이 없으면 알림도 초기화
+    if (selectedTime == null) reminderMinutes = null
+
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    // 오늘 자정 epoch ms (마감일 "오늘" 선택 시 사용)
-    val todayEndOfDay = remember {
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 23)
-            set(Calendar.MINUTE, 59)
-            set(Calendar.SECOND, 59)
-            set(Calendar.MILLISECOND, 999)
-        }.timeInMillis
-    }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     fun submit() {
-        if (title.isBlank()) {
-            titleError = true
-            return
-        }
-        onAdd(
+        if (title.isBlank()) { titleError = true; return }
+        if (isTooSoon) return
+        onSave(
             title.trim(),
             description.trim().ifBlank { null },
             selectedPriority,
-            if (dueTodayChecked) todayEndOfDay else null,
+            dueDate,
             showOnLockScreen,
+            reminderMinutes,
         )
         scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
     }
 
+    // ── TimePickerDialog ──────────────────────────────────────
+    if (showTimePicker) {
+        val now = LocalTime.now()
+        val timePickerState = rememberTimePickerState(
+            initialHour   = selectedTime?.hour   ?: now.hour,
+            initialMinute = selectedTime?.minute ?: now.minute,
+            is24Hour      = true,
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
+                    showTimePicker = false
+                }) { Text("확인") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("취소") }
+            },
+            text = { TimePicker(state = timePickerState) },
+        )
+    }
+
+    // ── BottomSheet ───────────────────────────────────────────
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -119,14 +168,15 @@ fun AddTaskBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .imePadding()                 // 키보드 위로 시트 끌어올림
-                .navigationBarsPadding(),     // 하단 네비게이션 바 여백
+                .imePadding()
+                .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // ── 헤더 ─────────────────────────────────────────
             Text(
-                text = "새 할 일",
+                text = if (isEditMode) "할 일 수정" else "새 할 일",
                 style = MaterialTheme.typography.titleLarge,
             )
 
@@ -197,27 +247,59 @@ fun AddTaskBottomSheet(
                 }
             }
 
-            // ── 오늘 마감 토글 ────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
+            // ── 마감 시간 (오늘 고정, 시간만 선택) ───────────
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "마감 시간",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { showTimePicker = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm"))
+                                ?: "시간 선택",
+                        )
+                    }
+                    if (selectedTime != null) {
+                        TextButton(onClick = {
+                            selectedTime = null
+                        }) {
+                            Text("삭제")
+                        }
+                    }
+                }
+                if (isTooSoon) {
                     Text(
-                        text = "오늘 마감",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = "오늘의 할 일 목록에 표시됩니다",
+                        text = "현재 시각 기준 5분 이후 시간을 선택해 주세요.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
-                Switch(
-                    checked = dueTodayChecked,
-                    onCheckedChange = { dueTodayChecked = it },
-                )
+            }
+
+            // ── 사전 알림 (시간이 설정된 경우) ───────────────
+            if (selectedTime != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "사전 알림",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReminderChip("없음",  reminderMinutes == null) { reminderMinutes = null }
+                        ReminderChip("10분",  reminderMinutes == 10)   { reminderMinutes = 10 }
+                        ReminderChip("30분",  reminderMinutes == 30)   { reminderMinutes = 30 }
+                        ReminderChip("1시간", reminderMinutes == 60)   { reminderMinutes = 60 }
+                    }
+                }
             }
 
             // ── 잠금화면 표시 토글 ────────────────────────────
@@ -265,9 +347,9 @@ fun AddTaskBottomSheet(
                 }
                 Button(
                     onClick = ::submit,
-                    enabled = title.isNotBlank(),
+                    enabled = title.isNotBlank() && !isTooSoon,
                 ) {
-                    Text("추가")
+                    Text(if (isEditMode) "저장" else "추가")
                 }
             }
 
@@ -298,5 +380,18 @@ private fun PriorityChip(
             selectedBorderColor = selectedColor,
             selectedBorderWidth = 1.5.dp,
         ),
+    )
+}
+
+@Composable
+private fun ReminderChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
     )
 }

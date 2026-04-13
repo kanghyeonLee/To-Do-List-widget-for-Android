@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -231,7 +232,7 @@ private fun DueDateChip(dueDate: Long) {
     val now = System.currentTimeMillis()
     val isOverdue = dueDate < now
     val label = remember(dueDate) {
-        SimpleDateFormat("M월 d일", Locale.KOREA).format(Date(dueDate))
+        SimpleDateFormat("HH:mm", Locale.KOREA).format(Date(dueDate))
     }
 
     Text(
@@ -286,6 +287,7 @@ fun PriorityGroupCard(
     bgColor: Color,
     onToggleDone: (TaskEntity) -> Unit,
     onDelete: (TaskEntity) -> Unit,
+    onEdit: (TaskEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ElevatedCard(
@@ -310,6 +312,7 @@ fun PriorityGroupCard(
                         task = task,
                         onToggleDone = { onToggleDone(task) },
                         onDelete = { onDelete(task) },
+                        onEdit = { onEdit(task) },
                     )
                     if (index < tasks.lastIndex) {
                         HorizontalDivider(
@@ -335,6 +338,7 @@ private fun GroupedTaskRow(
     task: TaskEntity,
     onToggleDone: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     var isDeleted by remember { mutableStateOf(false) }
 
@@ -385,6 +389,7 @@ private fun GroupedTaskRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
+                .clickable { onEdit() }
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

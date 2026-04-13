@@ -49,6 +49,20 @@
     -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!--
+        SCHEDULE_EXACT_ALARM (Android 12 / API 31+)
+        AlarmManager.setExactAndAllowWhileIdle() 사용 시 필요.
+        사용자가 설정에서 개별 앱에 허용해야 함 (런타임 권한 아님).
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+        USE_EXACT_ALARM (Android 13 / API 33+)
+        캘린더·알람 앱 용도. SCHEDULE_EXACT_ALARM 대신 또는 병행 선언.
+        스토어 정책: 알림·리마인더 기능이 핵심 기능인 앱에 한해 허용.
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
     <!-- ══════════════════════════════════════════════════════
          Application
          ══════════════════════════════════════════════════════ -->
@@ -119,6 +133,14 @@
         -->
         <receiver
             android:name=".receiver.TaskActionReceiver"
+            android:exported="false" />
+
+        <!-- ── TodoAlarmReceiver ──────────────────────────────
+             AlarmManager가 발화하면 호출됨.
+             exported="false" : AlarmManager PendingIntent를 통해서만 수신
+        -->
+        <receiver
+            android:name=".receiver.TodoAlarmReceiver"
             android:exported="false" />
 
     </application>

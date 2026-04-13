@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
 import com.kanghyeon.todolist.data.repository.TaskRepository
+import com.kanghyeon.todolist.service.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,7 @@ sealed interface TaskEvent {
 @HiltViewModel
 class TaskViewModel @Inject constructor(
     private val repository: TaskRepository,
+    private val alarmScheduler: AlarmScheduler,
 ) : ViewModel() {
 
     // ── UI State ─────────────────────────────────────────
@@ -132,28 +134,33 @@ class TaskViewModel @Inject constructor(
         priority: Int = 1,
         dueDate: Long? = null,
         showOnLockScreen: Boolean = true,
+        reminderMinutes: Int? = null,
     ) {
         if (title.isBlank()) {
             emitEvent(TaskEvent.ShowMessage("제목을 입력해 주세요."))
             return
         }
         viewModelScope.launch {
-            repository.saveTask(
-                TaskEntity(
-                    title            = title.trim(),
-                    description      = description?.trim(),
-                    priority         = priority,
-                    dueDate          = dueDate,
-                    showOnLockScreen = showOnLockScreen,
-                )
+            val task = TaskEntity(
+                title            = title.trim(),
+                description      = description?.trim(),
+                priority         = priority,
+                dueDate          = dueDate,
+                showOnLockScreen = showOnLockScreen,
+                reminderMinutes  = reminderMinutes,
             )
+            val id = repository.saveTask(task)
+            alarmScheduler.schedule(task.copy(id = id))
         }
     }
 
     /** 기존 할 일 수정 */
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
-            repository.saveTask(task.copy(updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(updatedAt = System.currentTimeMillis())
+            repository.saveTask(updated)
+            alarmScheduler.cancel(task.id)
+            alarmScheduler.schedule(updated)
         }
     }
 
@@ -164,7 +171,11 @@ class TaskViewModel @Inject constructor(
      */
     fun toggleDone(id: Long, currentDone: Boolean) {
         viewModelScope.launch {
-            repository.toggleDone(id = id, isDone = !currentDone)
+            val isDone = !currentDone
+            repository.toggleDone(id = id, isDone = isDone)
+            // 완료 시 알람 취소, 미완료 복구 시 재예약은 Task 전체 정보가 필요하므로
+            // 완료 전환만 취소 (미완료 복구는 사용자가 직접 날짜·알림을 다시 설정)
+            if (isDone) alarmScheduler.cancel(id)
         }
     }
 
@@ -174,6 +185,7 @@ class TaskViewModel @Inject constructor(
      */
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
+            alarmScheduler.cancel(task.id)
             repository.deleteTask(task)
             emitEvent(TaskEvent.TaskDeleted(task))
         }
@@ -183,6 +195,7 @@ class TaskViewModel @Inject constructor(
     fun restoreTask(task: TaskEntity) {
         viewModelScope.launch {
             repository.saveTask(task)
+            alarmScheduler.schedule(task)
         }
     }
 
@@ -226,6 +239,19 @@ class TaskViewModel @Inject constructor(
             if (newDate.isAfter(LocalDate.now(zone))) return@update currentMs
             newDate.atStartOfDay(zone).toInstant().toEpochMilli()
         }
+    }
+
+    /**
+     * 아카이브 날짜를 특정 날짜로 직접 설정.
+     * HorizontalDateStrip 날짜 클릭 및 DatePicker 선택 시 사용.
+     *
+     * @param dateMs 선택된 날짜 epoch ms (UTC 자정 또는 로컬 자정 모두 허용)
+     */
+    fun selectArchiveDate(dateMs: Long) {
+        val zone = ZoneId.systemDefault()
+        val date = Instant.ofEpochMilli(dateMs).atZone(zone).toLocalDate()
+        if (date.isAfter(LocalDate.now(zone))) return
+        _selectedArchiveDate.value = date.atStartOfDay(zone).toInstant().toEpochMilli()
     }
 
     /**

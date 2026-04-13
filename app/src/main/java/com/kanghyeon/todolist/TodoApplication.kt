@@ -19,5 +19,6 @@ class TodoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         NotificationHelper.createChannel(this)
+        NotificationHelper.createReminderChannel(this)
     }
 }

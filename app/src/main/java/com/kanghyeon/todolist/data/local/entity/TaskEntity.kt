@@ -62,6 +62,12 @@ data class TaskEntity(
      * NONE / DAILY / WEEKLY / MONTHLY
      */
     val repeatType: RepeatType = RepeatType.NONE,
+
+    /**
+     * 사전 알림 시간 (분 단위, null = 알림 없음)
+     * 예: 10 → 마감 10분 전 알림. dueDate가 null이면 무시됨.
+     */
+    val reminderMinutes: Int? = null,
 )
 
 // ───────────────────────────────────────────────

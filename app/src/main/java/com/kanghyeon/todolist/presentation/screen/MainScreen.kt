@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,16 +17,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -33,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -40,8 +47,10 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +75,7 @@ import com.kanghyeon.todolist.presentation.theme.PriorityMedium
 import com.kanghyeon.todolist.presentation.viewmodel.TaskEvent
 import com.kanghyeon.todolist.presentation.viewmodel.TaskUiState
 import com.kanghyeon.todolist.presentation.viewmodel.TaskViewModel
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -103,6 +113,7 @@ fun MainScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showBottomSheet by remember { mutableStateOf(false) }
+    var editingTask     by remember { mutableStateOf<TaskEntity?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
     // TopAppBar 스크롤 연동 (스크롤 시 TopAppBar 축소)
@@ -200,25 +211,42 @@ fun MainScreen(
             // ── 탭 콘텐츠 ────────────────────────────────────
             when {
                 uiState.isLoading -> LoadingContent()
-                selectedTab == 0  -> TodoContent(uiState, viewModel)
+                selectedTab == 0  -> TodoContent(uiState, viewModel, onEdit = { editingTask = it })
                 else              -> ArchiveContent(archiveDate, archiveTasks, viewModel)
             }
         }
     }
 
-    // ── 할 일 추가 BottomSheet ────────────────────────────────
-    if (showBottomSheet) {
+    // ── 할 일 추가 / 수정 BottomSheet ────────────────────────
+    if (showBottomSheet || editingTask != null) {
+        val et = editingTask
         AddTaskBottomSheet(
-            onDismiss = { showBottomSheet = false },
-            onAdd = { title, desc, priority, dueDate, showOnLock ->
-                viewModel.addTask(
-                    title = title,
-                    description = desc,
-                    priority = priority,
-                    dueDate = dueDate,
-                    showOnLockScreen = showOnLock,
-                )
+            task = et,
+            onDismiss = { showBottomSheet = false; editingTask = null },
+            onSave = { title, desc, priority, dueDate, showOnLock, reminderMinutes ->
+                if (et != null) {
+                    viewModel.updateTask(
+                        et.copy(
+                            title            = title,
+                            description      = desc,
+                            priority         = priority,
+                            dueDate          = dueDate,
+                            showOnLockScreen = showOnLock,
+                            reminderMinutes  = reminderMinutes,
+                        )
+                    )
+                } else {
+                    viewModel.addTask(
+                        title            = title,
+                        description      = desc,
+                        priority         = priority,
+                        dueDate          = dueDate,
+                        showOnLockScreen = showOnLock,
+                        reminderMinutes  = reminderMinutes,
+                    )
+                }
                 showBottomSheet = false
+                editingTask = null
             },
         )
     }
@@ -240,6 +268,7 @@ fun MainScreen(
 private fun TodoContent(
     uiState: TaskUiState,
     viewModel: TaskViewModel,
+    onEdit: (TaskEntity) -> Unit,
 ) {
     if (uiState.activeTasks.isEmpty()) {
         EmptyContent(
@@ -286,6 +315,7 @@ private fun TodoContent(
                             bgColor = MaterialTheme.colorScheme.surface,
                             onToggleDone = { task -> viewModel.toggleDone(task.id, task.isDone) },
                             onDelete = { task -> viewModel.deleteTask(task) },
+                            onEdit = { task -> onEdit(task) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -301,7 +331,7 @@ private fun TodoContent(
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * 상단 DaySelector로 날짜를 선택하면 해당 날짜에 완료된 할 일만 표시.
+ * 상단 HorizontalDateStrip으로 날짜를 선택하면 해당 날짜에 완료된 할 일만 표시.
  *
  * 데이터 흐름:
  *   ViewModel._selectedArchiveDate (MutableStateFlow)
@@ -311,18 +341,47 @@ private fun TodoContent(
  * @param archiveDate  현재 선택된 날짜의 시작 epoch ms
  * @param archiveTasks 해당 날짜에 완료된 할 일 목록 (updatedAt DESC)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ArchiveContent(
     archiveDate: Long,
     archiveTasks: List<TaskEntity>,
     viewModel: TaskViewModel,
 ) {
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    // ── 백업용 DatePickerDialog ───────────────────────────
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = archiveDate,
+            selectableDates = object : SelectableDates {
+                // UTC 자정 기준 오늘 이하만 허용 (+1일 버퍼로 타임존 오차 흡수)
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis <= System.currentTimeMillis() + 86_400_000L
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { viewModel.selectArchiveDate(it) }
+                    showDatePicker = false
+                }) { Text("확인") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("취소") }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // ── 날짜 선택기 ───────────────────────────────────
-        DaySelector(
-            dateMs    = archiveDate,
-            onPrevious = { viewModel.moveArchiveDate(-1) },
-            onNext     = { viewModel.moveArchiveDate(+1) },
+        // ── 가로 날짜 바 ──────────────────────────────────
+        HorizontalDateStrip(
+            selectedDateMs  = archiveDate,
+            onDateSelected  = { viewModel.selectArchiveDate(it) },
+            onCalendarClick = { showDatePicker = true },
         )
         HorizontalDivider()
 
@@ -357,70 +416,187 @@ private fun ArchiveContent(
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Day Selector — 아카이브 날짜 탐색 UI
+// HorizontalDateStrip — 가로 스크롤형 날짜 바
 // ══════════════════════════════════════════════════════════════════
 
+/** 날짜 바에 표시할 과거 날짜 수 (오늘 포함 총 DATE_STRIP_TOTAL일) */
+private const val DATE_STRIP_DAYS_BACK = 89  // 오늘 + 89일 전 = 90개
+
 /**
- * 좌우 화살표로 날짜를 하루씩 이동하는 내비게이터.
+ * 가로 스크롤 날짜 선택 바.
  *
- * - 오늘 이후 날짜로는 이동 불가 (미래에 완료 항목이 존재할 수 없음)
- * - java.time.LocalDate 기반 포맷팅 (minSdk 26 이상)
+ * [설계]
+ * - 오늘 포함 최근 90일을 LazyRow로 나열 (오래된 날짜가 왼쪽)
+ * - 선택된 날짜는 자동으로 중앙 근처로 스크롤 (animateScrollToItem)
+ * - 오른쪽 끝 캘린더 아이콘 → 백업 DatePickerDialog 호출
  *
- * @param dateMs    현재 선택된 날짜의 시작 epoch ms
- * @param onPrevious 이전 날 버튼 클릭 콜백
- * @param onNext     다음 날 버튼 클릭 콜백
+ * @param selectedDateMs  현재 선택된 날짜의 시작 epoch ms (로컬 자정)
+ * @param onDateSelected  날짜 칩 클릭 시 해당 날짜의 시작 epoch ms 전달
+ * @param onCalendarClick 캘린더 아이콘 클릭 콜백
  */
 @Composable
-private fun DaySelector(
-    dateMs: Long,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
+private fun HorizontalDateStrip(
+    selectedDateMs: Long,
+    onDateSelected: (Long) -> Unit,
+    onCalendarClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val zone      = remember { ZoneId.systemDefault() }
-    val localDate = remember(dateMs) {
-        Instant.ofEpochMilli(dateMs).atZone(zone).toLocalDate()
-    }
-    val isToday   = remember(dateMs) { localDate == LocalDate.now(zone) }
+    val zone  = remember { ZoneId.systemDefault() }
+    val today = remember { LocalDate.now(zone) }
 
-    val dateText  = remember(dateMs) {
-        localDate.format(
-            DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)", Locale.KOREA)
-        )
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment     = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onPrevious) {
-            Icon(
-                imageVector        = Icons.Default.KeyboardArrowLeft,
-                contentDescription = "이전 날",
-            )
+    // 89일 전 ~ 오늘 (총 90개)
+    val dates = remember(today) {
+        (DATE_STRIP_DAYS_BACK downTo 0).map { daysBack ->
+            today.minusDays(daysBack.toLong())
         }
+    }
 
-        Text(
-            text  = dateText,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),
+    val selectedDate = remember(selectedDateMs) {
+        Instant.ofEpochMilli(selectedDateMs).atZone(zone).toLocalDate()
+    }
+
+    // 선택 날짜의 목록 인덱스
+    val selectedIndex = remember(selectedDate) {
+        dates.indexOfFirst { it == selectedDate }.coerceAtLeast(0)
+    }
+
+    // 선택 날짜에 해당하는 월 레이블 (선택 변경 시 갱신)
+    val monthLabel = remember(selectedDate) {
+        selectedDate.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREA))
+    }
+
+    val listState = rememberLazyListState()
+
+    // 선택 날짜가 바뀌면 해당 항목이 뷰 중앙에 오도록 스크롤
+    LaunchedEffect(selectedIndex) {
+        listState.animateScrollToItem(
+            index  = (selectedIndex - 3).coerceAtLeast(0),
         )
+    }
 
-        // 오늘이면 비활성화 (미래 이동 차단)
-        IconButton(
-            onClick  = onNext,
-            enabled  = !isToday,
+    Column(modifier = modifier.fillMaxWidth()) {
+
+        // ── 헤더: 월 레이블 + 캘린더 아이콘 ─────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector        = Icons.Default.KeyboardArrowRight,
-                contentDescription = "다음 날",
-                tint = if (isToday)
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
-                else
-                    MaterialTheme.colorScheme.onSurface,
+            Text(
+                text  = monthLabel,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.primary,
             )
+            IconButton(onClick = onCalendarClick) {
+                Icon(
+                    imageVector        = Icons.Outlined.CalendarMonth,
+                    contentDescription = "달력에서 날짜 선택",
+                    tint               = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
+
+        // ── 날짜 칩 LazyRow ────────────────────────────────
+        LazyRow(
+            state           = listState,
+            contentPadding  = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier        = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+        ) {
+            items(
+                count = dates.size,
+                key   = { dates[it].toEpochDay() },
+            ) { idx ->
+                val date    = dates[idx]
+                val startMs = date.atStartOfDay(zone).toInstant().toEpochMilli()
+                DateChip(
+                    date       = date,
+                    isSelected = date == selectedDate,
+                    isToday    = date == today,
+                    onClick    = { onDateSelected(startMs) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 날짜 바의 개별 날짜 칩.
+ *
+ * [시각 언어]
+ * - 선택됨   : primary 배경 + onPrimary 텍스트
+ * - 오늘(미선택): primary 텍스트 + 굵게 + 하단 점
+ * - 일요일   : error 색상
+ * - 토요일   : tertiary 색상
+ * - 평일     : onSurfaceVariant
+ */
+@Composable
+private fun DateChip(
+    date: LocalDate,
+    isSelected: Boolean,
+    isToday: Boolean,
+    onClick: () -> Unit,
+) {
+    val dayOfWeek = date.dayOfWeek
+
+    val containerColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        Color.Transparent
+    }
+
+    val baseTextColor = when {
+        isToday              -> MaterialTheme.colorScheme.primary
+        dayOfWeek == DayOfWeek.SUNDAY   -> MaterialTheme.colorScheme.error
+        dayOfWeek == DayOfWeek.SATURDAY -> MaterialTheme.colorScheme.tertiary
+        else                 -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val textColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else baseTextColor
+
+    // 하단 점: 오늘 표시 (선택된 경우 onPrimary, 미선택이면 primary)
+    val dotColor = when {
+        isToday && isSelected  -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+        isToday && !isSelected -> MaterialTheme.colorScheme.primary
+        else                   -> Color.Transparent
+    }
+
+    val weekdayLabel = date.format(DateTimeFormatter.ofPattern("E", Locale.KOREA))
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier
+            .width(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(containerColor)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 2.dp),
+    ) {
+        // 요일 (월 / 화 / …)
+        Text(
+            text  = weekdayLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor,
+        )
+        // 일 숫자
+        Text(
+            text  = date.dayOfMonth.toString(),
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+            ),
+            color = textColor,
+        )
+        // 오늘 표시 점
+        Box(
+            modifier = Modifier
+                .size(4.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
     }
 }
 
