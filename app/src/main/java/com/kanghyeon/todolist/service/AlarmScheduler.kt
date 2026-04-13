@@ -48,7 +48,7 @@ class AlarmScheduler @Inject constructor(
             if (!alarmManager.canScheduleExactAlarms()) return
         }
 
-        val intent = buildIntent(task.id, task.title, dueDate)
+        val intent = buildIntent(task.id, task.title, dueDate, task.priority)
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerMs,
@@ -79,12 +79,13 @@ class AlarmScheduler @Inject constructor(
     // 내부 헬퍼
     // ──────────────────────────────────────────────────────
 
-    private fun buildIntent(taskId: Long, title: String, dueDate: Long): PendingIntent {
+    private fun buildIntent(taskId: Long, title: String, dueDate: Long, priority: Int): PendingIntent {
         val intent = Intent(context, TodoAlarmReceiver::class.java).apply {
             action = TodoAlarmReceiver.ACTION_REMINDER
             putExtra(TodoAlarmReceiver.EXTRA_TASK_ID, taskId)
             putExtra(TodoAlarmReceiver.EXTRA_TASK_TITLE, title)
             putExtra(TodoAlarmReceiver.EXTRA_DUE_DATE, dueDate)
+            putExtra(TodoAlarmReceiver.EXTRA_PRIORITY, priority)
         }
         return PendingIntent.getBroadcast(
             context,

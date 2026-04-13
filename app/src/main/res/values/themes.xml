@@ -19,4 +19,16 @@
         <!-- Compose setContent 전에 잠깐 보이는 스플래시 배경색 -->
         <item name="android:windowBackground">@android:color/white</item>
     </style>
+
+    <!--
+        잠금화면 위 투명 오버레이 Activity 전용 테마.
+        windowIsTranslucent=true : Activity 뒤 배경(잠금화면)이 비침
+        backgroundDimEnabled=false : 딤 처리 없음
+    -->
+    <style name="Theme.LockScreenBanner" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

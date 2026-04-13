@@ -89,22 +89,12 @@
             </intent-filter>
         </activity>
 
-        <!-- ── Foreground Service ─────────────────────────────
-             exported="false"  : 외부 앱에서 직접 시작 불가 (보안)
-             foregroundServiceType: API 34+에서 필수 선언
-               - dataSync: 사용자 데이터를 로컬에서 지속적으로 처리하는 유형
-               - 잠금화면 알림 갱신 목적에 가장 적합
-        -->
+        <!-- ── Foreground Service ────────────────────────────── -->
         <service
             android:name=".service.TodoForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
-        <!--
-            stopWithTask="false":
-            사용자가 앱을 최근 앱 목록에서 스와이프해 종료해도 서비스가 유지됨.
-            true로 설정하면 앱 종료 시 서비스도 함께 중단됨.
-        -->
 
         <!-- ── BootReceiver ───────────────────────────────────
              exported="true"   : 시스템 브로드캐스트를 수신하므로 필수

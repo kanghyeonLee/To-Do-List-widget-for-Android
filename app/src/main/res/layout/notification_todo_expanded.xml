@@ -1,187 +1,134 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    RemoteViews 전용 알림 확장 뷰 (우선순위 카드 스타일)
-
-    [디자인 변경]
-    - slot_X_priority (dot) 제거
-    - slot_X_accent (4dp 세로 막대) 추가
-      → 색상은 NotificationHelper에서 setInt("setBackgroundColor") 로 우선순위별 동적 지정
-    - 슬롯 컨테이너 배경 → NotificationHelper에서 파스텔 색상 동적 지정
-    - 텍스트 색상 → NotificationHelper에서 priority별 진한 색상 동적 지정
-
-    [RemoteViews 제약 — 변경 없음]
-    - <View> 금지 → 액센트 바·구분선 모두 <ImageView>/<LinearLayout> 으로 대체
-    - android:tint 금지 → drawable 자체 색상 또는 background 사용
-    - ?attr/ 테마 참조 금지 → @android:color/transparent 또는 명시적 색상 사용
-
-    [슬롯 구조]
-    slot_X_container : 외부 컨테이너 (파스텔 bg, VISIBLE/GONE 토글)
-      slot_X_accent  : 좌측 4dp 세로 액센트 바 (우선순위 색상)
-      slot_X_title   : 할 일 제목
-      slot_X_done_btn: 완료 버튼
-    divider_X        : 슬롯 간 구분선 (LinearLayout 1dp)
-    tv_more_count    : "외 N개 더..." 텍스트
--->
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 펼친 상태 — 최대 3개 슬롯 (max 256dp) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingTop="4dp"
-    android:paddingBottom="4dp">
+    android:padding="4dp">
 
-    <!-- ══════════════════════════════════════════
-         슬롯 0
-         ══════════════════════════════════════════ -->
+    <!-- ── Slot 0 ── -->
     <LinearLayout
         android:id="@+id/slot_0_container"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:visibility="gone">
+        android:layout_marginBottom="2dp">
 
-        <!--
-            좌측 액센트 바
-            <View> 는 RemoteViews 허용 목록에 없으므로 <ImageView> (src 없이 background만) 사용.
-            실제 색상은 NotificationHelper.setInt("setBackgroundColor") 로 덮어씀.
-        -->
         <ImageView
             android:id="@+id/slot_0_accent"
             android:layout_width="4dp"
-            android:layout_height="match_parent"
-            android:background="@color/priority_high" />
+            android:layout_height="34dp"
+            android:background="#FFE53935" />
 
         <TextView
             android:id="@+id/slot_0_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="4dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="8dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#FF212121"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textSize="14sp"
-            android:textColor="@color/notification_text_primary" />
+            android:text="할 일 제목" />
 
         <ImageButton
             android:id="@+id/slot_0_done_btn"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:src="@drawable/ic_check_circle_outline"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_done_circle"
             android:background="@android:color/transparent"
             android:contentDescription="완료" />
     </LinearLayout>
 
-    <!-- 구분선: <View> 대신 height=1dp LinearLayout -->
-    <LinearLayout
-        android:id="@+id/divider_0"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:orientation="horizontal"
-        android:background="@color/notification_divider"
-        android:visibility="gone" />
-
-    <!-- ══════════════════════════════════════════
-         슬롯 1
-         ══════════════════════════════════════════ -->
+    <!-- ── Slot 1 ── -->
     <LinearLayout
         android:id="@+id/slot_1_container"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:visibility="gone">
+        android:layout_marginBottom="2dp">
 
         <ImageView
             android:id="@+id/slot_1_accent"
             android:layout_width="4dp"
-            android:layout_height="match_parent"
-            android:background="@color/priority_high" />
+            android:layout_height="34dp"
+            android:background="#FFE53935" />
 
         <TextView
             android:id="@+id/slot_1_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="4dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="8dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#FF212121"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textSize="14sp"
-            android:textColor="@color/notification_text_primary" />
+            android:text="할 일 제목" />
 
         <ImageButton
             android:id="@+id/slot_1_done_btn"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:src="@drawable/ic_check_circle_outline"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_done_circle"
             android:background="@android:color/transparent"
             android:contentDescription="완료" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/divider_1"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:orientation="horizontal"
-        android:background="@color/notification_divider"
-        android:visibility="gone" />
-
-    <!-- ══════════════════════════════════════════
-         슬롯 2
-         ══════════════════════════════════════════ -->
+    <!-- ── Slot 2 ── -->
     <LinearLayout
         android:id="@+id/slot_2_container"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone">
+        android:gravity="center_vertical">
 
         <ImageView
             android:id="@+id/slot_2_accent"
             android:layout_width="4dp"
-            android:layout_height="match_parent"
-            android:background="@color/priority_high" />
+            android:layout_height="34dp"
+            android:background="#FFE53935" />
 
         <TextView
             android:id="@+id/slot_2_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="4dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="8dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#FF212121"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textSize="14sp"
-            android:textColor="@color/notification_text_primary" />
+            android:text="할 일 제목" />
 
         <ImageButton
             android:id="@+id/slot_2_done_btn"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:src="@drawable/ic_check_circle_outline"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_done_circle"
             android:background="@android:color/transparent"
             android:contentDescription="완료" />
     </LinearLayout>
 
-    <!-- ══════════════════════════════════════════
-         초과 항목 안내 ("외 N개 더...")
-         ══════════════════════════════════════════ -->
+    <!-- "외 N개 더…" -->
     <TextView
         android:id="@+id/tv_more_count"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="end"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="4dp"
-        android:textSize="12sp"
-        android:textColor="@color/notification_text_secondary"
-        android:visibility="gone" />
-
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:textSize="11sp"
+        android:textColor="#FF9E9E9E"
+        android:visibility="gone"
+        android:text="외 N개 더…" />
 </LinearLayout>
