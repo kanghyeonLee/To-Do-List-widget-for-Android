@@ -12,11 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.painterResource
+import com.kanghyeon.todolist.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kanghyeon.todolist.data.local.entity.Priority
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
+import com.kanghyeon.todolist.presentation.theme.AppOutline
 import com.kanghyeon.todolist.presentation.theme.PriorityHigh
 import com.kanghyeon.todolist.presentation.theme.PriorityLow
 import com.kanghyeon.todolist.presentation.theme.PriorityMedium
@@ -60,7 +61,13 @@ fun TrashScreen(
     if (showEmptyConfirm) {
         AlertDialog(
             onDismissRequest = { showEmptyConfirm = false },
-            icon = { Icon(Icons.Outlined.DeleteForever, contentDescription = null) },
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.trash_2),
+                    contentDescription = null,
+                    modifier = Modifier.padding(4.dp),
+                )
+            },
             title = { Text("휴지통 비우기") },
             text = { Text("휴지통의 모든 항목이 영구 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.") },
             confirmButton = {
@@ -88,16 +95,21 @@ fun TrashScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "뒤로")
+                        Icon(
+                            painter = painterResource(R.drawable.x),
+                            contentDescription = "뒤로",
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
                 },
                 actions = {
                     if (deletedTasks.isNotEmpty()) {
                         IconButton(onClick = { showEmptyConfirm = true }) {
                             Icon(
-                                imageVector = Icons.Outlined.Delete,
+                                painter = painterResource(R.drawable.trash_2),
                                 contentDescription = "휴지통 비우기",
                                 tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(22.dp),
                             )
                         }
                     }
@@ -120,9 +132,10 @@ fun TrashScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Delete,
+                        painter = painterResource(R.drawable.trash_2),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        modifier = Modifier.size(48.dp),
                     )
                     Text(
                         text = "휴지통이 비어 있어요",
@@ -189,9 +202,12 @@ private fun TrashTaskItem(
 
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, AppOutline),
     ) {
         Row(
             modifier = Modifier
@@ -246,18 +262,20 @@ private fun TrashTaskItem(
             // 복구 버튼
             IconButton(onClick = onRestore) {
                 Icon(
-                    imageVector = Icons.Outlined.Restore,
+                    painter = painterResource(R.drawable.rotate_ccw),
                     contentDescription = "복구",
                     tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
                 )
             }
 
             // 영구 삭제 버튼
             IconButton(onClick = { showDeleteConfirm = true }) {
                 Icon(
-                    imageVector = Icons.Outlined.DeleteForever,
+                    painter = painterResource(R.drawable.trash_2),
                     contentDescription = "영구 삭제",
                     tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }

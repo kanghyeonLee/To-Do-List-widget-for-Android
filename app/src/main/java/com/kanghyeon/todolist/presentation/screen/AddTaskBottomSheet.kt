@@ -1,6 +1,8 @@
 package com.kanghyeon.todolist.presentation.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,12 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Notifications
+import android.os.Build
+import android.view.LayoutInflater
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,14 +29,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
-import android.os.Build
-import android.view.LayoutInflater
 import com.kanghyeon.todolist.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,8 +48,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -59,6 +66,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * 할 일 추가/수정 ModalBottomSheet
@@ -189,6 +197,22 @@ fun AddTaskBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)),
+                )
+            }
+        },
     ) {
         Column(
             modifier = Modifier
@@ -206,7 +230,7 @@ fun AddTaskBottomSheet(
             )
 
             // ── 제목 입력 ─────────────────────────────────────
-            OutlinedTextField(
+            TextField(
                 value = title,
                 onValueChange = {
                     title = it
@@ -223,13 +247,22 @@ fun AddTaskBottomSheet(
                     capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Next,
                 ),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor   = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor   = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    errorContainerColor     = Color.Transparent,
+                    errorIndicatorColor     = Color.Transparent,
+                    disabledContainerColor  = Color.Transparent,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
             )
 
             // ── 메모 입력 (선택) ──────────────────────────────
-            OutlinedTextField(
+            TextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("메모 (선택)") },
@@ -240,6 +273,13 @@ fun AddTaskBottomSheet(
                     imeAction = ImeAction.Done,
                 ),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor   = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor   = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledContainerColor  = Color.Transparent,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -289,7 +329,8 @@ fun AddTaskBottomSheet(
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(
-                            text = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm"))
+                            text = selectedTime
+                                ?.format(DateTimeFormatter.ofPattern("a h:mm", Locale.KOREA))
                                 ?: "시간 선택",
                         )
                     }
@@ -338,9 +379,10 @@ fun AddTaskBottomSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Notifications,
+                        painter = painterResource(R.drawable.flag),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
                     )
                     Column {
                         Text(
@@ -394,6 +436,7 @@ private fun PriorityChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
+        shape = CircleShape,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = selectedColor.copy(alpha = 0.15f),
             selectedLabelColor = selectedColor,
@@ -418,5 +461,6 @@ private fun ReminderChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
+        shape = CircleShape,
     )
 }

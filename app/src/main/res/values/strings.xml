@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ToDoList</string>
+    <string name="app_name">To Do List</string>
     <string name="notification_channel_name">할 일 목록</string>
     <string name="notification_channel_desc">잠금화면에서 할 일을 확인하고 체크할 수 있는 알림입니다.</string>
 </resources>

@@ -22,16 +22,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.ui.res.painterResource
+import com.kanghyeon.todolist.R
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -148,7 +145,7 @@ fun MainScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "할 일",
+                        text = "To Do List",
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     )
                 },
@@ -156,16 +153,19 @@ fun MainScreen(
                     // 휴지통 이동 버튼 (항상 표시)
                     IconButton(onClick = { showTrashScreen = true }) {
                         Icon(
-                            imageVector = Icons.Outlined.DeleteOutline,
+                            painter = painterResource(R.drawable.trash_2),
                             contentDescription = "휴지통",
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                     // 아카이브 탭 + 선택 날짜에 항목이 있을 때만 삭제 버튼 노출
                     if (selectedTab == 1 && archiveTasks.isNotEmpty()) {
                         IconButton(onClick = viewModel::clearCompletedForSelectedDate) {
                             Icon(
-                                imageVector = Icons.Outlined.Delete,
+                                painter = painterResource(R.drawable.trash_2),
                                 contentDescription = "이 날의 완료 항목 삭제",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(22.dp),
                             )
                         }
                     }
@@ -180,13 +180,18 @@ fun MainScreen(
         floatingActionButton = {
             // 아카이브 탭에서는 FAB 숨김
             if (selectedTab == 0) {
-                ExtendedFloatingActionButton(
+                FloatingActionButton(
                     onClick = { showBottomSheet = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("할 일 추가") },
+                    shape = CircleShape,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                )
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.plus),
+                        contentDescription = "할 일 추가",
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -274,7 +279,7 @@ private fun TodoContent(
 ) {
     if (uiState.activeTasks.isEmpty()) {
         EmptyContent(
-            icon = Icons.Outlined.CheckCircle,
+            iconRes = R.drawable.house,
             message = "할 일이 없어요",
             subMessage = "아래 버튼을 눌러 첫 번째 할 일을 추가해 보세요.",
         )
@@ -291,10 +296,13 @@ private fun TodoContent(
     )
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+
         Priority.entries
             .sortedByDescending { it.value }
             .forEach { priority ->
@@ -406,7 +414,7 @@ private fun ArchiveContent(
         // ── 해당 날짜 완료 목록 ───────────────────────────
         if (archiveTasks.isEmpty()) {
             EmptyContent(
-                icon       = Icons.Outlined.CheckCircle,
+                iconRes    = R.drawable.calendar_check,
                 message    = "이 날 완료된 할 일이 없어요",
                 subMessage = "할 일을 체크하면 날짜별로 기록됩니다.",
             )
@@ -474,7 +482,7 @@ private fun PrioritySectionHeader(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)  // sticky 시 아이템 가림
+            .background(MaterialTheme.colorScheme.background)  // sticky 시 아이템 가림
             .padding(vertical = 6.dp),
     ) {
         // 우선순위 색상 점
@@ -512,7 +520,7 @@ private fun LoadingContent() {
 
 @Composable
 private fun EmptyContent(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconRes: Int,
     message: String,
     subMessage: String,
 ) {
@@ -532,14 +540,11 @@ private fun EmptyContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(
-                    imageVector = icon,
+                    painter = painterResource(iconRes),
                     contentDescription = null,
                     modifier = Modifier
-                        .padding(bottom = 8.dp)
-                        .let {
-                            // 아이콘 크기 조정
-                            it
-                        },
+                        .size(48.dp)
+                        .padding(bottom = 8.dp),
                     tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                 )
                 Text(
