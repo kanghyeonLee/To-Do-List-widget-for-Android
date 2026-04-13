@@ -1,5 +1,8 @@
 # To Do List
 
+![Version](https://img.shields.io/badge/version-1.2.0-5C6BC0)
+<!-- APP_VERSION: v1.2.0 -->
+
 > 깔끔하고 직관적인 안드로이드 할 일 관리 앱
 
 Jetpack Compose + Material 3 기반의 네이티브 안드로이드 앱입니다.  
