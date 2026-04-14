@@ -29,6 +29,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 
+
 // ──────────────────────────────────────────────────────────
 // 새 할 일 작성 임시 저장 (Draft)
 // ──────────────────────────────────────────────────────────
@@ -51,10 +52,13 @@ data class NewTaskDraft(
     val selectedMinute: Int? = null,
     val showOnLockScreen: Boolean = true,
     val reminderMinutes: Int? = null,
+    /** 마감 날짜 (epoch ms, 선택된 날짜의 로컬 자정 기준) — null = 날짜 미선택 */
+    val selectedDateMs: Long? = null,
 ) {
     /** 기본값과 동일하면 비어 있는 draft로 간주 */
     val isEmpty: Boolean
-        get() = title.isBlank() && description.isBlank() && selectedHour == null
+        get() = title.isBlank() && description.isBlank() &&
+                selectedHour == null && selectedDateMs == null
 }
 
 // ──────────────────────────────────────────────────────────
@@ -114,6 +118,11 @@ class TaskViewModel @Inject constructor(
         context.getSharedPreferences("routine_prefs", Context.MODE_PRIVATE)
     }
 
+    // ── SharedPreferences — 자정 동기화 마지막 실행 날짜 ────────────
+    private val syncPrefs by lazy {
+        context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+    }
+
     // ── 루틴 템플릿 그룹 목록 (그룹 + 소속 할 일) ───────────────────
     val templateGroups: StateFlow<List<RoutineTemplateGroupWithTasks>> =
         templateRepository.getAllGroupsWithTasks()
@@ -123,8 +132,9 @@ class TaskViewModel @Inject constructor(
                 initialValue = emptyList(),
             )
 
-    // ── 앱 시작 시 오늘 루틴 자동 생성 ──────────────────────────
+    // ── 앱 시작 시: 자정 동기화 + 루틴 자동 생성 ────────────────────
     init {
+        performMidnightSync()
         generateDailyRoutines()
     }
 
@@ -137,16 +147,23 @@ class TaskViewModel @Inject constructor(
      * - 마지막 구독자가 떠난 후 5초간 업스트림 유지 → 화면 회전 시 재구독 비용 없음
      * - 5초 초과 시 수집 중단 → 백그라운드 배터리 절약
      */
+    /**
+     * '할 일' 탭 상태.
+     * - dueDate가 있는 D-Day 할 일은 D-Day 탭에서 별도 관리하므로 제외.
+     * - 미완료 + 오늘 완료(D-Day 아닌 것)만 포함.
+     */
     val uiState: StateFlow<TaskUiState> = combine(
         repository.getActiveTasks(),
         repository.getCompletedTasks(),
     ) { active, completed ->
         val todayStart = todayStartMs()
 
-        val completedToday = completed.filter { it.updatedAt >= todayStart }
+        // D-Day 할 일(dueDate != null)은 '할 일' 탭에서 제외
+        val completedToday = completed.filter { it.updatedAt >= todayStart && it.dueDate == null }
+        val nonDDayActive  = active.filter { it.dueDate == null }
 
-        val mainTasks = (active + completedToday).sortedWith(
-            compareBy<TaskEntity> { it.isDone } 
+        val mainTasks = (nonDDayActive + completedToday).sortedWith(
+            compareBy<TaskEntity> { it.isDone }
                 .thenByDescending { it.priority }
                 .thenByDescending { it.createdAt }
         )
@@ -161,6 +178,15 @@ class TaskViewModel @Inject constructor(
         initialValue = TaskUiState(isLoading = true),
     )
 
+    // ── D-Day 탭 할 일 목록 ──────────────────────────────────────
+    /** dueDate가 지정된 할 일 (마감일 오름차순, 완료 항목은 하단) */
+    val dDayTasks: StateFlow<List<TaskEntity>> = repository.getDDayTasks()
+        .stateIn(
+            scope        = viewModelScope,
+            started      = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
     // ── 아카이브 날짜 선택 상태 ──────────────────────────
     /**
      * 아카이브 탭 Day Selector의 선택 날짜 (00:00:00 epoch ms).
@@ -170,30 +196,22 @@ class TaskViewModel @Inject constructor(
     val selectedArchiveDate: StateFlow<Long> = _selectedArchiveDate.asStateFlow()
 
     /**
-     * 선택된 날짜에 완료된 할 일 목록 (updatedAt 기준, DESC 정렬).
+     * 선택된 날짜에 아카이브된 할 일 목록.
      *
-     * [아카이브 정책 변경: 당일 이관 유예]
-     * - '오늘' 완료한 항목은 메인 탭(activeTasks)에 계속 노출되므로, 아카이브 탭과의 중복을 방지하기 위해 
-     * 선택된 날짜가 오늘(todayStartMs)이거나 그 이후인 경우 빈 리스트를 반환한다.
-     * - 자정이 지나 '어제'가 된 항목들부터 이 목록에 포함되어 아카이브 탭에 나타난다.
+     * [아카이브 정책]
+     * - 자정 자동 동기화 후 archivedAt이 설정된 항목 우선 표시
+     * - 구버전 데이터(archivedAt=null, isDone=1) 하위 호환 포함
+     * - 오늘 날짜 선택 시: 수동 동기화된(isArchived=1) 항목만 표시
      *
-     * flatMapLatest: 날짜가 바뀌면 즉시 이전 쿼리를 취소하고 새 날짜로 재구독한다.
+     * flatMapLatest: 날짜가 바뀌면 이전 쿼리를 즉시 취소하고 새 날짜로 재구독.
      */
     val archiveTasks: StateFlow<List<TaskEntity>> = _selectedArchiveDate
         .flatMapLatest { startMs ->
-            val todayStart = todayStartMs()
-            if (startMs >= todayStart) {
-                repository.getCompletedTasks().map { completedList ->
-                    completedList.filter { 
-                        it.isArchived && it.updatedAt >= startMs && it.updatedAt < startMs + DAY_MS 
-                    }
-                }
-            } else {
-                repository.getCompletedTasksByDate(
-                    startOfDay = startMs,
-                    endOfDay   = startMs + DAY_MS - 1,
-                )
-            }
+            repository.getArchivedTasksByDate(
+                startOfDay = startMs,
+                endOfDay   = startMs + DAY_MS,
+                todayStart = todayStartMs(),
+            )
         }
         .stateIn(
             scope        = viewModelScope,
@@ -232,11 +250,6 @@ class TaskViewModel @Inject constructor(
     // ── 일회성 이벤트 채널 ────────────────────────────────
     private val _eventChannel = Channel<TaskEvent>(Channel.BUFFERED)
     val events = _eventChannel.receiveAsFlow()
-
-    // ── 초기화: 자정 자동 루틴 주입 ──────────────────────
-    init {
-        viewModelScope.launch { generateDailyRoutines() }
-    }
 
     // ──────────────────────────────────────────────────────
     // 사용자 액션 핸들러
@@ -474,20 +487,25 @@ class TaskViewModel @Inject constructor(
     fun syncCompletedTasksToArchive() {
         viewModelScope.launch {
             val todayStart = todayStartMs()
-            
+            val zone       = ZoneId.systemDefault()
+
             val targetsToSync = uiState.value.activeTasks.filter { task ->
                 task.isDone && !task.isArchived && task.updatedAt >= todayStart
             }
-            
+
             if (targetsToSync.isEmpty()) {
                 emitEvent(TaskEvent.ShowMessage("새롭게 동기화할 완료 항목이 없습니다."))
                 return@launch
             }
 
             targetsToSync.forEach { task ->
-                repository.updateTask(task.copy(isArchived = true))
+                // 완료 날짜(updatedAt)의 자정을 archivedAt으로 설정
+                val completionDay = Instant.ofEpochMilli(task.updatedAt)
+                    .atZone(zone).toLocalDate()
+                    .atStartOfDay(zone).toInstant().toEpochMilli()
+                repository.archiveTask(task.id, completionDay)
             }
-            
+
             emitEvent(TaskEvent.ShowMessage("${targetsToSync.size}개의 할 일을 아카이브에 기록했습니다."))
         }
     }
@@ -562,6 +580,66 @@ class TaskViewModel @Inject constructor(
     fun deleteTemplateTask(id: Long) {
         viewModelScope.launch {
             templateRepository.deleteTask(id)
+        }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 자정 자동 아카이브 동기화 (하루 1회)
+    // ──────────────────────────────────────────────────────
+
+    /**
+     * 자정이 지난 후 앱이 켜지거나 ViewModel이 init 될 때 한 번 실행.
+     *
+     * [아카이브 조건]
+     * 1. 일반 할 일 (dueDate = null)                 → 어제 자정으로 아카이브
+     * 2. 완료된 D-Day 할 일 (isDone=true)             → 완료 날짜(updatedAt) 자정으로 아카이브
+     * 3. 기한 초과 미완료 D-Day (dueDate < today)     → dueDate 날짜 자정으로 아카이브
+     * 4. 기한이 남은 D-Day (dueDate >= today, !done)  → D-Day 탭 유지 (아카이브 안 함)
+     */
+    private fun performMidnightSync() {
+        viewModelScope.launch {
+            val today = LocalDate.now().toString()   // "yyyy-MM-dd"
+            val lastSync = syncPrefs.getString(PREF_KEY_LAST_MIDNIGHT_SYNC, null)
+            if (lastSync == today) return@launch     // 오늘 이미 실행됨
+
+            val todayStart    = todayStartMs()
+            val yesterdayStart = todayStart - DAY_MS
+            val zone          = ZoneId.systemDefault()
+
+            val tasks = repository.getNonArchivedTasksOnce()
+            var archivedCount = 0
+
+            tasks.forEach { task ->
+                val archivedAt: Long? = when {
+                    // 조건 1: 일반 할 일 (dueDate 없음) → 어제 자정
+                    task.dueDate == null ->
+                        yesterdayStart
+
+                    // 조건 2: 완료된 D-Day → 완료 날짜 자정
+                    task.isDone ->
+                        Instant.ofEpochMilli(task.updatedAt)
+                            .atZone(zone).toLocalDate()
+                            .atStartOfDay(zone).toInstant().toEpochMilli()
+
+                    // 조건 3: 기한 초과 미완료 D-Day → dueDate 날짜 자정
+                    task.dueDate < todayStart ->
+                        Instant.ofEpochMilli(task.dueDate)
+                            .atZone(zone).toLocalDate()
+                            .atStartOfDay(zone).toInstant().toEpochMilli()
+
+                    // 조건 4: 기한이 남은 미완료 D-Day → 아카이브 안 함
+                    else -> null
+                }
+
+                if (archivedAt != null) {
+                    repository.archiveTask(task.id, archivedAt)
+                    archivedCount++
+                }
+            }
+
+            syncPrefs.edit()
+                .putString(PREF_KEY_LAST_MIDNIGHT_SYNC, today)
+                .apply()
         }
     }
 
@@ -652,7 +730,8 @@ class TaskViewModel @Inject constructor(
 
     companion object {
         private const val DAY_MS = 24 * 60 * 60 * 1_000L
-        private const val PREF_KEY_LAST_ROUTINE_DATE = "last_routine_date"
+        private const val PREF_KEY_LAST_ROUTINE_DATE    = "last_routine_date"
+        private const val PREF_KEY_LAST_MIDNIGHT_SYNC   = "last_midnight_sync"
 
         /** 오늘 00:00:00.000 epoch ms (로컬 타임존 기준) */
         fun todayStartMs(): Long =

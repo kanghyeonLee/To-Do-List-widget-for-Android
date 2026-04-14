@@ -56,6 +56,10 @@ import com.kanghyeon.todolist.presentation.theme.CardBorderColor
 import com.kanghyeon.todolist.presentation.theme.OverdueRed
 import com.kanghyeon.todolist.presentation.theme.SwipeDeleteBackground
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
 
@@ -67,6 +71,10 @@ import java.util.Locale
  * - 완료 항목: 아주 연한 파란색(#E3F2FD) 배경
  * - 체크박스: 커스텀 원형 — unchecked=회색 테두리, checked=딥 인디고 채움 + 흰 체크
  */
+/**
+ * @param dDayLabel  null이면 D-Day 뱃지 미표시. "D-3", "D-Day", "D+1" 형식 문자열.
+ * @param onEdit     null이면 클릭 동작 없음.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskItem(
@@ -74,6 +82,8 @@ fun TaskItem(
     onToggleDone: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    onEdit: (() -> Unit)? = null,
+    dDayLabel: String? = null,
 ) {
     var isDeleted by remember { mutableStateOf(false) }
 
@@ -104,6 +114,8 @@ fun TaskItem(
             task         = task,
             titleAlpha   = titleAlpha,
             onToggleDone = onToggleDone,
+            onEdit       = onEdit,
+            dDayLabel    = dDayLabel,
         )
     }
 }
@@ -113,16 +125,18 @@ private fun TaskCard(
     task: TaskEntity,
     titleAlpha: Float,
     onToggleDone: () -> Unit,
+    onEdit: (() -> Unit)? = null,
+    dDayLabel: String? = null,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, CardBorderColor, RoundedCornerShape(16.dp)),
+            .border(1.dp, CardBorderColor, RoundedCornerShape(16.dp))
+            .then(if (onEdit != null) Modifier.clickable(onClick = onEdit) else Modifier),
         shape  = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            // 완료 항목 → 아주 연한 파란색, 미완료 → 흰색
             containerColor = if (task.isDone) ArchiveCardBg else MaterialTheme.colorScheme.surface,
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -162,14 +176,79 @@ private fun TaskCard(
                 task.dueDate?.let { DueDateChip(dueDate = it) }
             }
 
-            // ── 원형 체크박스 ─────────────────────────────────
-            CircularCheckbox(
-                checked   = task.isDone,
-                onClick   = onToggleDone,
-                primary   = primaryColor,
-                modifier  = Modifier.padding(horizontal = 4.dp),
-            )
+            // ── D-Day 뱃지 + 원형 체크박스 ──────────────────
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (dDayLabel != null) {
+                    DDayBadge(label = dDayLabel, isDone = task.isDone)
+                }
+                CircularCheckbox(
+                    checked  = task.isDone,
+                    onClick  = onToggleDone,
+                    primary  = primaryColor,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// D-Day 뱃지
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * "D-3", "D-Day", "D+2" 형태의 pill 뱃지.
+ * 완료된 항목은 반투명 회색으로 표시.
+ */
+@Composable
+private fun DDayBadge(label: String, isDone: Boolean) {
+    val isOverdue  = label.startsWith("D+")
+    val isDDayToday = label == "D-Day"
+
+    val baseColor = when {
+        isDone      -> Color(0xFF9CA3AF)
+        isOverdue   -> OverdueRed
+        isDDayToday -> Color(0xFFF59E0B)   // Amber — D-Day 당일
+        else        -> Color(0xFF4F46E5)   // Indigo — 기한 남음
+    }
+
+    Box(
+        modifier = Modifier
+            .background(
+                color = baseColor.copy(alpha = if (isDone) 0.15f else 0.12f),
+                shape = RoundedCornerShape(6.dp),
+            )
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                color      = if (isDone) Color(0xFF9CA3AF) else baseColor,
+            ),
+        )
+    }
+}
+
+/**
+ * dueDate(epoch ms)를 기준으로 D-Day 라벨 문자열을 반환한다.
+ *   양수 차이 (미래) → "D-3"
+ *   0              → "D-Day"
+ *   음수 차이 (과거) → "D+2"
+ */
+fun dDayLabel(dueDate: Long): String {
+    val today     = LocalDate.now()
+    val dueLocal  = Instant.ofEpochMilli(dueDate)
+        .atZone(ZoneId.systemDefault()).toLocalDate()
+    val days      = ChronoUnit.DAYS.between(today, dueLocal).toInt()
+    return when {
+        days > 0  -> "D-$days"
+        days == 0 -> "D-Day"
+        else      -> "D+${-days}"
     }
 }
 

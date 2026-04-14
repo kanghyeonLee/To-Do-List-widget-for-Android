@@ -111,4 +111,30 @@ class TaskRepositoryImpl @Inject constructor(
         withContext(dispatcher) {
             dao.deleteCompletedByDateRange(startOfDay = startOfDay, endOfDay = endOfDay)
         }
+
+    override fun getDDayTasks(): Flow<List<TaskEntity>> =
+        dao.getDDayTasks().flowOn(dispatcher)
+
+    override fun getArchivedTasksByDate(
+        startOfDay: Long,
+        endOfDay:   Long,
+        todayStart: Long,
+    ): Flow<List<TaskEntity>> =
+        dao.getArchivedTasksByDate(
+            startOfDay = startOfDay,
+            endOfDay   = endOfDay,
+            todayStart = todayStart,
+        ).flowOn(dispatcher)
+
+    override suspend fun getNonArchivedTasksOnce(): List<TaskEntity> =
+        withContext(dispatcher) { dao.getNonArchivedTasksOnce() }
+
+    override suspend fun archiveTask(id: Long, archivedAt: Long) =
+        withContext(dispatcher) {
+            dao.archiveTask(
+                id         = id,
+                archivedAt = archivedAt,
+                updatedAt  = System.currentTimeMillis(),
+            )
+        }
 }

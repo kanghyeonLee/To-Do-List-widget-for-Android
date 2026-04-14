@@ -33,7 +33,7 @@ import com.kanghyeon.todolist.data.local.entity.TaskEntity
         RoutineTemplateGroupEntity::class,
         RoutineTemplateTaskEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -132,13 +132,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 → v6: tasks 테이블에 archivedAt(INTEGER, nullable) 컬럼 추가.
+         * 자정 동기화 시 아카이브 날짜를 명시적으로 저장하기 위한 컬럼.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN archivedAt INTEGER DEFAULT NULL")
+            }
+        }
+
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 DB_NAME,
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
     }

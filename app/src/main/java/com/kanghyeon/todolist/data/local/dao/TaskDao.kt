@@ -76,6 +76,60 @@ interface TaskDao {
     )
     fun getDeletedTasks(): Flow<List<TaskEntity>>
 
+    /**
+     * D-Day 탭: dueDate가 지정된 할 일 중 삭제·아카이브되지 않은 항목.
+     * - 미완료 → 완료 순, 마감 임박 순(dueDate ASC) 정렬
+     */
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE dueDate IS NOT NULL
+          AND isDeleted = 0
+          AND isArchived = 0
+        ORDER BY isDone ASC, dueDate ASC
+        """
+    )
+    fun getDDayTasks(): Flow<List<TaskEntity>>
+
+    /**
+     * 아카이브 탭: 날짜 범위 내 아카이브/완료 항목 통합 조회.
+     *
+     * [쿼리 조건]
+     * 1. 신규 아카이브 (archivedAt 설정됨): isArchived=1 AND archivedAt in [start, end)
+     * 2. 구버전 수동 아카이브 (archivedAt null): isArchived=1 AND updatedAt in [start, end)
+     * 3. 구버전 완료 항목 호환 (isArchived=0, isDone=1): updatedAt in [start, end) 이고 오늘이전만
+     *    → :todayStart 조건으로 오늘 완료 항목이 중복 노출되는 것을 방지
+     */
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE isDeleted = 0 AND (
+            (isArchived = 1 AND archivedAt IS NOT NULL
+             AND archivedAt >= :startOfDay AND archivedAt < :endOfDay)
+            OR
+            (isArchived = 1 AND archivedAt IS NULL
+             AND updatedAt >= :startOfDay AND updatedAt < :endOfDay)
+            OR
+            (isDone = 1 AND isArchived = 0
+             AND updatedAt >= :startOfDay AND updatedAt < :endOfDay
+             AND updatedAt < :todayStart)
+        )
+        ORDER BY COALESCE(archivedAt, updatedAt) DESC
+        """
+    )
+    fun getArchivedTasksByDate(
+        startOfDay: Long,
+        endOfDay:   Long,
+        todayStart: Long,
+    ): Flow<List<TaskEntity>>
+
+    /**
+     * 자정 동기화용 단건 조회 (Flow 아님).
+     * 아카이브·삭제되지 않은 전체 할 일을 반환한다.
+     */
+    @Query("SELECT * FROM tasks WHERE isDeleted = 0 AND isArchived = 0")
+    suspend fun getNonArchivedTasksOnce(): List<TaskEntity>
+
     // ──────────────────────────────────────────
     // WRITE
     // ──────────────────────────────────────────
@@ -138,4 +192,23 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks WHERE isDone = 1 AND isDeleted = 0")
     suspend fun deleteAllCompleted()
+
+    /**
+     * 할 일을 아카이브로 이동.
+     * isArchived = 1, archivedAt = 지정 날짜(epoch ms), updatedAt 갱신.
+     */
+    @Query(
+        """
+        UPDATE tasks
+        SET isArchived = 1,
+            archivedAt = :archivedAt,
+            updatedAt  = :updatedAt
+        WHERE id = :id
+        """
+    )
+    suspend fun archiveTask(
+        id:         Long,
+        archivedAt: Long,
+        updatedAt:  Long = System.currentTimeMillis(),
+    )
 }

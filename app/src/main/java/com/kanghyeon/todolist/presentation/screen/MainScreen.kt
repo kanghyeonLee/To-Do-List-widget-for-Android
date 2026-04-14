@@ -112,6 +112,7 @@ fun MainScreen(
     val uiState              by viewModel.uiState.collectAsStateWithLifecycle()
     val archiveDate          by viewModel.selectedArchiveDate.collectAsStateWithLifecycle()
     val archiveTasks         by viewModel.archiveTasks.collectAsStateWithLifecycle()
+    val dDayTasks            by viewModel.dDayTasks.collectAsStateWithLifecycle()
     val editingTask          by viewModel.editingTask.collectAsStateWithLifecycle()
     val newTaskDraft         by viewModel.newTaskDraft.collectAsStateWithLifecycle()
 
@@ -204,10 +205,10 @@ fun MainScreen(
                         )
                     }
 
-                    if (selectedTab == 0) {
+                    if (selectedTab == 0 || selectedTab == 2) {
                         IconButton(onClick = { showSyncConfirm = true }) {
                             Icon(
-                                painter            = painterResource(R.drawable.archive_restore), 
+                                painter            = painterResource(R.drawable.archive_restore),
                                 contentDescription = "아카이브 수동 동기화",
                                 tint               = MaterialTheme.colorScheme.primary,
                                 modifier           = Modifier.size(22.dp),
@@ -289,7 +290,7 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTab == 0) {
+            if (selectedTab == 0 || selectedTab == 2) {
                 FloatingActionButton(
                     onClick        = { showBottomSheet = true },
                     shape          = CircleShape,
@@ -315,7 +316,7 @@ fun MainScreen(
 
         Column(modifier = Modifier.padding(innerPadding)) {
 
-            // ── 탭: 할 일 / 아카이브 ─────────────────────────────
+            // ── 탭: 할 일 / 아카이브 / D-Day ─────────────────────
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor   = MaterialTheme.colorScheme.surface,
@@ -340,8 +341,8 @@ fun MainScreen(
                     selected = selectedTab == 0,
                     onClick  = { selectedTab = 0 },
                     text     = {
-                        val totalCount = uiState.activeTasks.size
-                        val completedCount = uiState.activeTasks.count { it.isDone }                            
+                        val totalCount     = uiState.activeTasks.size
+                        val completedCount = uiState.activeTasks.count { it.isDone }
                         Text(
                             text  = "할 일 ($completedCount / $totalCount)",
                             color = if (selectedTab == 0) MaterialTheme.colorScheme.primary
@@ -368,17 +369,39 @@ fun MainScreen(
                         )
                     },
                 )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick  = { selectedTab = 2 },
+                    text     = {
+                        val count = dDayTasks.count { !it.isDone }
+                        val label = if (count > 0) "D-Day ($count)" else "D-Day"
+                        Text(
+                            text  = label,
+                            color = if (selectedTab == 2) MaterialTheme.colorScheme.primary
+                                    else Color(0xFF6B7280),
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = if (selectedTab == 2) FontWeight.SemiBold
+                                             else FontWeight.Normal,
+                            ),
+                        )
+                    },
+                )
             }
 
             // ── 탭 콘텐츠 ─────────────────────────────────────────
             when {
                 uiState.isLoading -> LoadingContent()
                 selectedTab == 0  -> TodoContent(
-                    uiState  = uiState,
+                    uiState   = uiState,
                     viewModel = viewModel,
-                    onEdit   = { viewModel.setEditingTask(it) },
+                    onEdit    = { viewModel.setEditingTask(it) },
                 )
-                else              -> ArchiveContent(archiveDate, archiveTasks, viewModel)
+                selectedTab == 1  -> ArchiveContent(archiveDate, archiveTasks, viewModel)
+                else              -> DDayContent(
+                    dDayTasks = dDayTasks,
+                    viewModel = viewModel,
+                    onEdit    = { viewModel.setEditingTask(it) },
+                )
             }
         }
     }
@@ -586,6 +609,71 @@ private fun TodoContent(
                         item { Spacer(Modifier.height(80.dp)) }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 탭 콘텐츠: D-Day — 마감일이 지정된 할 일 목록
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * D-Day 탭: dueDate가 있는 할 일을 마감 임박 순으로 표시.
+ *
+ * [정렬]
+ * - 미완료 우선, 마감일 오름차순 (가장 임박한 것 최상단)
+ * - 완료된 D-Day 항목은 하단에 표시 (자정 아카이브 전까지)
+ *
+ * [D-Day 뱃지]
+ * - "D-3"  → 3일 후 마감 (파란색)
+ * - "D-Day" → 오늘이 마감 (주황색)
+ * - "D+2"  → 2일 초과 (빨간색)
+ */
+@Composable
+private fun DDayContent(
+    dDayTasks: List<com.kanghyeon.todolist.data.local.entity.TaskEntity>,
+    viewModel: TaskViewModel,
+    onEdit: (com.kanghyeon.todolist.data.local.entity.TaskEntity) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        ScreenSectionHeader(
+            title   = "D-Day 마감",
+            iconRes = R.drawable.calendar_clock,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        if (dDayTasks.isEmpty()) {
+            EmptyContent(
+                iconRes    = R.drawable.calendar_check,
+                message    = "D-Day 할 일이 없습니다",
+                subMessage = "날짜가 지정된 할 일을 추가하면\n여기에 마감일 순으로 표시됩니다.",
+            )
+        } else {
+            LazyColumn(
+                modifier            = Modifier.fillMaxSize(),
+                contentPadding      = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(
+                    items = dDayTasks,
+                    key   = { "dday_${it.id}" },
+                ) { task ->
+                    val label = task.dueDate?.let { dDayLabel(it) }
+                    TaskItem(
+                        task         = task,
+                        onToggleDone = { viewModel.toggleTaskCompletion(task) },
+                        onDelete     = { viewModel.deleteTask(task) },
+                        onEdit       = { onEdit(task) },
+                        dDayLabel    = label,
+                        modifier     = Modifier.animateItem(),
+                    )
+                }
+                item { Spacer(Modifier.height(80.dp)) }
             }
         }
     }

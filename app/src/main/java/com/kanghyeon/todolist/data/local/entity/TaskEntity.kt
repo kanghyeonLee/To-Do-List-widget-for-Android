@@ -74,6 +74,16 @@ data class TaskEntity(
      * 예: 10 → 마감 10분 전 알림. dueDate가 null이면 무시됨.
      */
     val reminderMinutes: Int? = null,
+
+    /**
+     * 아카이브 날짜 (epoch ms, null = 아직 아카이브 미등록)
+     * 자정 동기화 시 조건에 따라 설정:
+     *   - 일반 할 일          → 어제 자정 (todayStart - DAY_MS)
+     *   - 완료된 D-Day 할 일  → 완료 날짜 자정 (updatedAt 의 start-of-day)
+     *   - 기한 초과 D-Day     → dueDate 날짜 자정 (dueDate 의 start-of-day)
+     * 아카이브 탭 날짜 필터링의 기준 컬럼으로 사용됨.
+     */
+    val archivedAt: Long? = null,
 )
 
 // ───────────────────────────────────────────────

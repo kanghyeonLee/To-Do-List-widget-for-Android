@@ -1,6 +1,8 @@
 package com.kanghyeon.todolist.presentation.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +23,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import android.os.Build
 import android.view.LayoutInflater
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -31,11 +37,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
@@ -62,6 +70,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import com.kanghyeon.todolist.data.local.entity.Priority
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
+import com.kanghyeon.todolist.presentation.theme.CardBorderColor
 import com.kanghyeon.todolist.presentation.theme.PriorityHigh
 import com.kanghyeon.todolist.presentation.theme.PriorityLow
 import com.kanghyeon.todolist.presentation.theme.PriorityMedium
@@ -71,6 +80,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -105,14 +115,28 @@ fun AddTaskBottomSheet(
 ) {
     val isEditMode = task != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
+    val scope      = rememberCoroutineScope()
+    val zone       = ZoneId.systemDefault()
 
-    // 수정 모드: 기존 Task에서 시간 추출 / 추가 모드: draft에서 복원
-    val initialTime = remember {
+    // 수정 모드: 기존 Task에서 날짜/시간 추출 / 추가 모드: draft에서 복원
+    val initialDate: LocalDate? = remember {
         if (task != null) {
             task.dueDate?.let { ms ->
-                val lt = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalTime()
-                LocalTime.of(lt.hour, lt.minute)
+                Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+            }
+        } else {
+            initialDraft.selectedDateMs?.let { ms ->
+                Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+            }
+        }
+    }
+    val initialTime: LocalTime? = remember {
+        if (task != null) {
+            task.dueDate?.let { ms ->
+                val lt = Instant.ofEpochMilli(ms).atZone(zone).toLocalTime()
+                // 자정(00:00)이면 날짜만 선택된 것으로 간주
+                if (lt.hour == 0 && lt.minute == 0) null
+                else LocalTime.of(lt.hour, lt.minute)
             }
         } else {
             if (initialDraft.selectedHour != null && initialDraft.selectedMinute != null)
@@ -127,9 +151,11 @@ fun AddTaskBottomSheet(
     var selectedPriority by remember { mutableIntStateOf(task?.priority ?: initialDraft.priority) }
     var showOnLockScreen by remember { mutableStateOf(task?.showOnLockScreen ?: initialDraft.showOnLockScreen) }
     var titleError       by remember { mutableStateOf(false) }
+    var selectedDate     by remember { mutableStateOf<LocalDate?>(initialDate) }
     var selectedTime     by remember { mutableStateOf<LocalTime?>(initialTime) }
     var reminderMinutes  by remember { mutableStateOf<Int?>(task?.reminderMinutes ?: initialDraft.reminderMinutes) }
     var showTimePicker   by remember { mutableStateOf(false) }
+    var showDatePicker   by remember { mutableStateOf(false) }
 
     // 상태 변경 시 draft 동기화 (추가 모드에서만 의미 있음)
     fun syncDraft() {
@@ -143,22 +169,36 @@ fun AddTaskBottomSheet(
                     selectedMinute   = selectedTime?.minute,
                     showOnLockScreen = showOnLockScreen,
                     reminderMinutes  = reminderMinutes,
+                    selectedDateMs   = selectedDate
+                        ?.atStartOfDay(zone)?.toInstant()?.toEpochMilli(),
                 )
             )
         }
     }
 
-    // 마감일 = 오늘 + 선택된 시간
-    val dueDate: Long? = selectedTime?.let { time ->
-        LocalDate.now()
-            .atTime(time)
-            .atZone(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
+    // 마감일 계산:
+    //   날짜 + 시간 → 정확한 타임스탬프
+    //   날짜만     → 해당 날짜 자정 (D-Day 분류용)
+    //   시간만     → 오늘 + 시간 (기존 동작 유지)
+    //   둘 다 없음 → null
+    val dueDate: Long? = when {
+        selectedDate != null && selectedTime != null ->
+            selectedDate!!.atTime(selectedTime!!)
+                .atZone(zone).toInstant().toEpochMilli()
+        selectedDate != null ->
+            selectedDate!!.atStartOfDay(zone).toInstant().toEpochMilli()
+        selectedTime != null ->
+            LocalDate.now().atTime(selectedTime!!)
+                .atZone(zone).toInstant().toEpochMilli()
+        else -> null
     }
 
-    // 현재+5분 유효성 검사
-    val isTooSoon = dueDate != null && dueDate < System.currentTimeMillis() + 5 * 60_000L
+    // 유효성 검사: 오늘 날짜(또는 날짜 미선택=오늘)이면 5분 이후 시간 필요
+    val effectiveDate = selectedDate ?: if (selectedTime != null) LocalDate.now() else null
+    val isTooSoon = dueDate != null &&
+            effectiveDate == LocalDate.now() &&
+            selectedTime != null &&
+            dueDate < System.currentTimeMillis() + 5 * 60_000L
 
     // 시간이 없으면 알림도 초기화
     if (selectedTime == null) reminderMinutes = null
@@ -175,6 +215,64 @@ fun AddTaskBottomSheet(
             reminderMinutes,
         )
         scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+    }
+
+    // ── DatePickerDialog (마감 날짜 선택) ──────────────────────
+    if (showDatePicker) {
+        val todayUtcMs = remember {
+            LocalDate.now(zone)
+                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        }
+        val initialUtcMs = remember(selectedDate) {
+            (selectedDate ?: LocalDate.now(zone))
+                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        }
+        val dpState = rememberDatePickerState(
+            initialSelectedDateMillis = initialUtcMs,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) =
+                    utcTimeMillis >= todayUtcMs     // 오늘 이후만 선택 가능
+            },
+        )
+        val dpColors = DatePickerDefaults.colors(
+            containerColor             = Color.White,
+            titleContentColor          = Color(0xFF6B7280),
+            headlineContentColor       = Color(0xFF1D1D1F),
+            weekdayContentColor        = Color(0xFF6B7280),
+            subheadContentColor        = Color(0xFF1D1D1F),
+            navigationContentColor     = Color(0xFF1D1D1F),
+            yearContentColor           = Color(0xFF1D1D1F),
+            currentYearContentColor    = MaterialTheme.colorScheme.primary,
+            selectedYearContentColor   = Color.White,
+            selectedYearContainerColor = MaterialTheme.colorScheme.primary,
+            dayContentColor            = Color(0xFF1D1D1F),
+            disabledDayContentColor    = Color(0xFFD1D5DB),
+            selectedDayContentColor    = Color.White,
+            selectedDayContainerColor  = MaterialTheme.colorScheme.primary,
+            todayContentColor          = MaterialTheme.colorScheme.primary,
+            todayDateBorderColor       = MaterialTheme.colorScheme.primary,
+            dividerColor               = Color(0xFFE5E7EB),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dpState.selectedDateMillis?.let { utcMs ->
+                        selectedDate = Instant.ofEpochMilli(utcMs)
+                            .atZone(ZoneOffset.UTC).toLocalDate()
+                        syncDraft()
+                    }
+                    showDatePicker = false
+                }) { Text("확인") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("취소") }
+            },
+            shape  = RoundedCornerShape(20.dp),
+            colors = dpColors,
+        ) {
+            DatePicker(state = dpState, colors = dpColors)
+        }
     }
 
     // ── TimePickerDialog (스피너 휠 방식) ────────────────────
@@ -371,7 +469,73 @@ fun AddTaskBottomSheet(
                 }
             }
 
-            // ── 마감 시간 (오늘 고정, 시간만 선택) ───────────
+            // ── 마감 날짜 (DatePicker) ────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text  = "마감 날짜",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF6B7280),
+                )
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    val dateLabel = selectedDate
+                        ?.format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)", Locale.KOREA))
+                        ?: "날짜 선택 (D-Day 기능)"
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                color = if (selectedDate != null)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
+                                else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (selectedDate != null) MaterialTheme.colorScheme.primary
+                                        else CardBorderColor,
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .clickable(
+                                onClick           = { showDatePicker = true },
+                                indication        = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            )
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            painter            = painterResource(R.drawable.calendar),
+                            contentDescription = null,
+                            tint               = if (selectedDate != null)
+                                MaterialTheme.colorScheme.primary
+                            else Color(0xFF6B7280),
+                            modifier           = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text  = dateLabel,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color      = if (selectedDate != null) MaterialTheme.colorScheme.primary
+                                             else Color(0xFF9CA3AF),
+                                fontWeight = if (selectedDate != null)
+                                    androidx.compose.ui.text.font.FontWeight.Medium
+                                else androidx.compose.ui.text.font.FontWeight.Normal,
+                            ),
+                        )
+                    }
+                    if (selectedDate != null) {
+                        TextButton(onClick = { selectedDate = null; syncDraft() }) {
+                            Text("삭제")
+                        }
+                    }
+                }
+            }
+
+            // ── 마감 시간 ─────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "마감 시간",
