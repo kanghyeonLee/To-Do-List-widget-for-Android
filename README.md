@@ -1,7 +1,7 @@
 # To Do List
 
-![Version](https://img.shields.io/badge/version-1.2.0-5C6BC0)
-<!-- APP_VERSION: v1.2.0 -->
+![Version](https://img.shields.io/badge/version-1.3.1-5C6BC0)
+<!-- APP_VERSION: v1.3.1 -->
 
 > 깔끔하고 직관적인 안드로이드 할 일 관리 앱
 
