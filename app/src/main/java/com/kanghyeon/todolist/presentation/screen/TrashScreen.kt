@@ -322,7 +322,7 @@ private fun TrashTaskItem(
             // 복구 버튼
             IconButton(onClick = onRestore) {
                 Icon(
-                    painter = painterResource(R.drawable.archive_restore),
+                    painter = painterResource(R.drawable.rotate_ccw),
                     contentDescription = "복구",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
