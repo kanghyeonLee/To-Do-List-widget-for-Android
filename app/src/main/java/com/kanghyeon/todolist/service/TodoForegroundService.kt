@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 /**
@@ -64,7 +65,8 @@ class TodoForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun observeAndUpdateNotification() {
-        repository.getLockScreenTasks()
+        repository.getDDayTasks()
+            .map { tasks -> tasks.filter { it.showOnLockScreen } } 
             .onEach { tasks ->
                 val notification = NotificationHelper.buildNotification(this, tasks)
                 getSystemService(NotificationManager::class.java)

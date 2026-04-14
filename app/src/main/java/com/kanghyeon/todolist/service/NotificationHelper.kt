@@ -15,6 +15,8 @@ import com.kanghyeon.todolist.receiver.TaskActionReceiver
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private val DUE_TIME_FMT: DateTimeFormatter =
@@ -128,22 +130,15 @@ object NotificationHelper {
         title: String,
         dueDate: Long?,
     ) {
-        val contentText = if (dueDate != null) {
-            val time = Instant.ofEpochMilli(dueDate)
-                .atZone(ZoneId.systemDefault())
-                .format(DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREA))
-            "마감: $time"
-        } else {
-            "마감이 다가왔습니다."
-        }
+        val contentText = "마감이 다가오고 있습니다. 잊지 말고 완료해 주세요!"
 
         val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_todo_notification)
+            .setSmallIcon(R.drawable.calendar_clock)
             .setContentTitle(title)
             .setContentText(contentText)
             .setContentIntent(buildLaunchIntent(context))
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // 팝업으로 확실히 띄움
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
@@ -154,15 +149,29 @@ object NotificationHelper {
     // ──────────────────────────────────────────────────────
     // 내부 헬퍼
     // ──────────────────────────────────────────────────────
+    private fun getDDayLabel(dueDateMillis: Long?): String {
+        if (dueDateMillis == null) return ""
+        val targetDate = Instant.ofEpochMilli(dueDateMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+        val today = LocalDate.now(ZoneId.systemDefault())
+        
+        val daysDiff = ChronoUnit.DAYS.between(today, targetDate)
+        return when {
+            daysDiff == 0L -> "D-Day"
+            daysDiff > 0 -> "D-$daysDiff"
+            else -> "D+${-daysDiff}"
+        }
+    }
 
     private fun buildEmptyNotification(
         context: Context,
         contentIntent: PendingIntent,
     ): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_todo_notification)
-            .setContentTitle("모든 할 일 완료!")
-            .setContentText("새로운 할 일을 추가해 보세요.")
+            .setSmallIcon(R.drawable.calendar_clock)
+            .setContentTitle("마감 임박 할 일 없음!") 
+            .setContentText("현재 등록된 D-Day 일정이 없습니다.") 
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -174,17 +183,17 @@ object NotificationHelper {
         tasks: List<TaskEntity>,
         contentIntent: PendingIntent,
     ): Notification {
-        val sorted         = tasks.sortedByDescending { it.priority }
+        val sorted         = tasks.sortedBy { it.dueDate }
         val visibleTasks   = sorted.take(MAX_VISIBLE_TASKS)
         val remainingCount = sorted.size - visibleTasks.size
 
-        val pillView     = buildPillRemoteViews(context, sorted.first())
+        val pillView       = buildPillRemoteViews(context, sorted.first())
         val expandedView = buildExpandedRemoteViews(context, visibleTasks, remainingCount)
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_todo_notification)
-            .setContentTitle("할 일 ${sorted.size}개")
-            .setContentText(sorted.first().title)
+            .setSmallIcon(R.drawable.calendar_clock)
+            .setContentTitle("D-Day 마감 ${sorted.size}개")
+            .setContentText("[${getDDayLabel(sorted.first().dueDate)}] ${sorted.first().title}") 
             .setContentIntent(contentIntent)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(pillView)
@@ -201,9 +210,7 @@ object NotificationHelper {
 
         views.setInt(R.id.pill_priority_bar, "setBackgroundColor", priorityAccentColor(task.priority))
 
-        val dueTimeText = task.dueDate?.let { ms ->
-            Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(DUE_TIME_FMT)
-        } ?: "기한 없음"
+        val dueTimeText = getDDayLabel(task.dueDate).ifEmpty { "기한 없음" }
         views.setTextViewText(R.id.pill_due_time, dueTimeText)
         views.setTextViewText(R.id.pill_title, task.title)
         views.setTextColor(R.id.pill_title, priorityTextColor(task.priority))
@@ -229,7 +236,11 @@ object NotificationHelper {
                 views.setViewVisibility(SLOT_CONTAINERS[i], android.view.View.VISIBLE)
                 views.setInt(SLOT_CONTAINERS[i], "setBackgroundColor", priorityBgColor(task.priority))
                 views.setInt(SLOT_ACCENTS[i],    "setBackgroundColor", priorityAccentColor(task.priority))
-                views.setTextViewText(SLOT_TITLES[i], task.title)
+                
+                val dDayLabel = getDDayLabel(task.dueDate)
+                val displayTitle = if (dDayLabel.isNotEmpty()) "[$dDayLabel] ${task.title}" else task.title
+                views.setTextViewText(SLOT_TITLES[i], displayTitle)
+                
                 views.setTextColor(SLOT_TITLES[i], priorityTextColor(task.priority))
                 val doneIntent = buildMarkDoneIntent(context, task.id, requestCode = i)
                 views.setOnClickPendingIntent(SLOT_DONE_BUTTONS[i], doneIntent)
