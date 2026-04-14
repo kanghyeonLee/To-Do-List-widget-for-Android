@@ -53,6 +53,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,6 +74,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.annotation.DrawableRes
 import androidx.activity.compose.BackHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -89,6 +95,15 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+// ══════════════════════════════════════════════════════════════════
+// 메인 하단 탭 메타 데이터
+// ══════════════════════════════════════════════════════════════════
+private enum class MainTab(val title: String, @DrawableRes val iconRes: Int) {
+    DDAY("D-Day", R.drawable.calendar_clock),
+    TASKS("할 일", R.drawable.house), 
+    ARCHIVE("아카이브", R.drawable.archive)     
+}
 
 // ══════════════════════════════════════════════════════════════════
 // 우선순위 페이지 메타 — HorizontalPager 각 페이지 설명
@@ -120,7 +135,7 @@ fun MainScreen(
     var showBottomSheet        by remember { mutableStateOf(false) }
     var showTrashScreen        by remember { mutableStateOf(false) }
     var showTemplateSheet      by remember { mutableStateOf(false) }
-    var selectedTab            by remember { mutableIntStateOf(0) }
+    var selectedTab            by remember { mutableIntStateOf(MainTab.TASKS.ordinal) }
     // 아카이브 일괄 삭제 확인 다이얼로그 표시 여부
     var showBulkDeleteConfirm    by remember { mutableStateOf(false) }
     var showSyncConfirm          by remember { mutableStateOf(false) }
@@ -205,7 +220,7 @@ fun MainScreen(
                         )
                     }
 
-                    if (selectedTab == 0 || selectedTab == 2) {
+                    if (selectedTab == MainTab.TASKS.ordinal || selectedTab == MainTab.DDAY.ordinal) {
                         IconButton(onClick = { showSyncConfirm = true }) {
                             Icon(
                                 painter            = painterResource(R.drawable.archive_restore),
@@ -216,7 +231,7 @@ fun MainScreen(
                         }
                     }
 
-                    if (selectedTab == 1 && archiveTasks.isNotEmpty()) {
+                    if (selectedTab == MainTab.ARCHIVE.ordinal && archiveTasks.isNotEmpty()) {
                         IconButton(onClick = { showBulkDeleteConfirm = true }) {
                             Icon(
                                 painter            = painterResource(R.drawable.trash_2),
@@ -290,7 +305,7 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTab == 0 || selectedTab == 2) {
+            if (selectedTab == MainTab.TASKS.ordinal || selectedTab == MainTab.DDAY.ordinal) {
                 FloatingActionButton(
                     onClick        = { showBottomSheet = true },
                     shape          = CircleShape,
@@ -312,92 +327,67 @@ fun MainScreen(
         },
         snackbarHost  = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color.White,
+                tonalElevation = 8.dp
+            ) {
+                MainTab.values().forEachIndexed { index, tab ->
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        icon = {
+                            if (tab == MainTab.DDAY) {
+                                val uncompletedDDayCount = dDayTasks.count { !it.isDone }
+                                if (uncompletedDDayCount > 0) {
+                                    BadgedBox(
+                                        badge = { Badge { Text(uncompletedDDayCount.toString()) } }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(tab.iconRes),
+                                            contentDescription = tab.title,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        painter = painterResource(tab.iconRes),
+                                        contentDescription = tab.title,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    painter = painterResource(tab.iconRes),
+                                    contentDescription = tab.title,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        },
+                        label = { Text(text = tab.title) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = Color.Gray,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+            }
+        }
     ) { innerPadding ->
 
         Column(modifier = Modifier.padding(innerPadding)) {
-
-            // ── 탭: 할 일 / 아카이브 / D-Day ─────────────────────
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor   = MaterialTheme.colorScheme.surface,
-                contentColor     = MaterialTheme.colorScheme.primary,
-                indicator        = { tabPositions ->
-                    Box(
-                        Modifier
-                            .tabIndicatorOffset(tabPositions[selectedTab])
-                            .height(2.dp)
-                            .padding(horizontal = 20.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp),
-                            ),
-                    )
-                },
-                divider = {
-                    HorizontalDivider(color = CardBorderColor, thickness = 1.dp)
-                },
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick  = { selectedTab = 0 },
-                    text     = {
-                        val totalCount     = uiState.activeTasks.size
-                        val completedCount = uiState.activeTasks.count { it.isDone }
-                        Text(
-                            text  = "할 일 ($completedCount / $totalCount)",
-                            color = if (selectedTab == 0) MaterialTheme.colorScheme.primary
-                                    else Color(0xFF6B7280),
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = if (selectedTab == 0) FontWeight.SemiBold
-                                             else FontWeight.Normal,
-                            ),
-                        )
-                    },
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick  = { selectedTab = 1 },
-                    text     = {
-                        Text(
-                            text  = "아카이브",
-                            color = if (selectedTab == 1) MaterialTheme.colorScheme.primary
-                                    else Color(0xFF6B7280),
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = if (selectedTab == 1) FontWeight.SemiBold
-                                             else FontWeight.Normal,
-                            ),
-                        )
-                    },
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick  = { selectedTab = 2 },
-                    text     = {
-                        val count = dDayTasks.count { !it.isDone }
-                        val label = if (count > 0) "D-Day ($count)" else "D-Day"
-                        Text(
-                            text  = label,
-                            color = if (selectedTab == 2) MaterialTheme.colorScheme.primary
-                                    else Color(0xFF6B7280),
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = if (selectedTab == 2) FontWeight.SemiBold
-                                             else FontWeight.Normal,
-                            ),
-                        )
-                    },
-                )
-            }
-
+            val currentTab = MainTab.values()[selectedTab]
             // ── 탭 콘텐츠 ─────────────────────────────────────────
             when {
                 uiState.isLoading -> LoadingContent()
-                selectedTab == 0  -> TodoContent(
+                currentTab == MainTab.TASKS   -> TodoContent(
                     uiState   = uiState,
                     viewModel = viewModel,
                     onEdit    = { viewModel.setEditingTask(it) },
                 )
-                selectedTab == 1  -> ArchiveContent(archiveDate, archiveTasks, viewModel)
-                else              -> DDayContent(
+                currentTab == MainTab.ARCHIVE -> ArchiveContent(archiveDate, archiveTasks, viewModel)
+                currentTab == MainTab.DDAY    -> DDayContent(
                     dDayTasks = dDayTasks,
                     viewModel = viewModel,
                     onEdit    = { viewModel.setEditingTask(it) },
@@ -649,7 +639,7 @@ private fun DDayContent(
 
         if (dDayTasks.isEmpty()) {
             EmptyContent(
-                iconRes    = R.drawable.calendar_check,
+                iconRes    = R.drawable.archive,
                 message    = "D-Day 할 일이 없습니다",
                 subMessage = "날짜가 지정된 할 일을 추가하면\n여기에 마감일 순으로 표시됩니다.",
             )
@@ -860,7 +850,7 @@ private fun ArchiveContent(
 
         ScreenSectionHeader(
             title    = "아카이브",
-            iconRes  = R.drawable.calendar_check,
+            iconRes  = R.drawable.archive,
             modifier = Modifier.padding(top = 8.dp),
         )
 
@@ -903,7 +893,7 @@ private fun ArchiveContent(
         // ── 해당 날짜 완료 목록 ──────────────────────────────────
         if (archiveTasks.isEmpty()) {
             EmptyContent(
-                iconRes    = R.drawable.calendar_check,
+                iconRes    = R.drawable.archive,
                 message    = "현재 등록된 할 일이 없습니다",
                 subMessage = "이 날짜에 완료된 할 일이 없어요.\n할 일을 체크하면 날짜별로 기록됩니다.",
             )
