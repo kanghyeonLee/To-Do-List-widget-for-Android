@@ -86,6 +86,7 @@ import com.kanghyeon.todolist.presentation.viewmodel.TaskViewModel
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -688,12 +689,27 @@ private fun ArchiveContent(
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
 
+    val initialUtcMillis = remember(archiveDate) {
+        Instant.ofEpochMilli(archiveDate)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .atStartOfDay(java.time.ZoneOffset.UTC)
+            .toInstant()
+            .toEpochMilli()
+    }
+
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = archiveDate,
+            initialSelectedDateMillis = initialUtcMillis,
             selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
-                    utcTimeMillis <= System.currentTimeMillis() + 86_400_000L
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    
+                    val todayUtc = java.time.LocalDate.now(ZoneId.systemDefault())
+                        .atStartOfDay(java.time.ZoneOffset.UTC)
+                        .toInstant()
+                        .toEpochMilli()
+                    return utcTimeMillis <= todayUtc
+                }
             },
         )
 
@@ -722,7 +738,15 @@ private fun ArchiveContent(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { viewModel.selectArchiveDate(it) }
+                    datePickerState.selectedDateMillis?.let { utcMillis ->
+                        val localMidnightMillis = Instant.ofEpochMilli(utcMillis)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toLocalDate()
+                            .atStartOfDay(ZoneId.systemDefault())
+                            .toInstant()
+                            .toEpochMilli()
+                        viewModel.selectArchiveDate(localMidnightMillis)
+                    }
                     showDatePicker = false
                 }) { Text("확인") }
             },
