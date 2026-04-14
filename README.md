@@ -18,7 +18,7 @@
 
 | 메인 화면 | 루틴 템플릿 | 아카이브 | 휴지통 |
 |:---------:|:-----------:|:--------:|:------:|
-| ![메인 화면](resources/images/메인화면.jpeg) | ![루틴 템플릿](resources/images/루틴%20템플릿.jpeg) | ![아카이브](resources/images/아카이브.jpeg) | ![휴지통](resources/images/휴지통.jpeg) |
+| ![메인 화면](resources/images/메인화면.jpeg) | ![루틴 템플릿](resources/images/템플릿.jpeg) | ![아카이브](resources/images/아카이브.jpeg) | ![휴지통](resources/images/휴지통.jpeg) |
 
 ---
 
