@@ -285,7 +285,9 @@ class TaskViewModel @Inject constructor(
                 )
                 repository.updateTask(updated)
                 alarmScheduler.cancel(editing.id)
-                alarmScheduler.schedule(updated)
+                if (updated.dueDate != null) {
+                    alarmScheduler.schedule(updated)
+                }
             } else {
                 val task = TaskEntity(
                     title            = title.trim(),
@@ -296,7 +298,9 @@ class TaskViewModel @Inject constructor(
                     reminderMinutes  = reminderMinutes,
                 )
                 val id = repository.saveTask(task)
-                alarmScheduler.schedule(task.copy(id = id))
+                if (task.dueDate != null) {
+                    alarmScheduler.schedule(task.copy(id = id))
+                }
                 // 새 할 일 저장 성공 → draft 초기화
                 _newTaskDraft.value = NewTaskDraft()
             }
@@ -327,7 +331,9 @@ class TaskViewModel @Inject constructor(
                 reminderMinutes  = reminderMinutes,
             )
             val id = repository.saveTask(task)
-            alarmScheduler.schedule(task.copy(id = id))
+            if (task.dueDate != null) {
+                alarmScheduler.schedule(task.copy(id = id))
+            }
         }
     }
 
@@ -337,7 +343,9 @@ class TaskViewModel @Inject constructor(
             val updated = task.copy(updatedAt = System.currentTimeMillis())
             repository.saveTask(updated)
             alarmScheduler.cancel(task.id)
-            alarmScheduler.schedule(updated)
+            if (updated.dueDate != null) {
+                alarmScheduler.schedule(updated)
+            }
         }
     }
 
@@ -355,8 +363,10 @@ class TaskViewModel @Inject constructor(
                 // 완료: 알람 취소
                 alarmScheduler.cancel(task.id)
             } else {
-                // 미완료 복구: dueDate가 미래면 알람 재예약
-                alarmScheduler.schedule(task.copy(isDone = false))
+                // 미완료 복구: D-Day가 있는 것만 알람 재예약
+                if (task.dueDate != null) {
+                    alarmScheduler.schedule(task.copy(isDone = false))
+                }
             }
         }
     }
@@ -377,7 +387,7 @@ class TaskViewModel @Inject constructor(
     fun restoreTask(task: TaskEntity) {
         viewModelScope.launch {
             repository.restoreFromTrash(task.id)
-            alarmScheduler.schedule(task)
+            if (task.dueDate != null) alarmScheduler.schedule(task)
         }
     }
 
@@ -385,7 +395,7 @@ class TaskViewModel @Inject constructor(
     fun restoreFromTrash(task: TaskEntity) {
         viewModelScope.launch {
             repository.restoreFromTrash(task.id)
-            alarmScheduler.schedule(task)
+            if (task.dueDate != null) alarmScheduler.schedule(task)
         }
     }
 

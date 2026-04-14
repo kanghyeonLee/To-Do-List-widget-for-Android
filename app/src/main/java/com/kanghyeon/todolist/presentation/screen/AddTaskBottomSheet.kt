@@ -68,6 +68,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import com.kanghyeon.todolist.data.local.entity.Priority
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
 import com.kanghyeon.todolist.presentation.theme.CardBorderColor
@@ -593,39 +596,47 @@ fun AddTaskBottomSheet(
             }
 
             // ── 잠금화면 표시 토글 ────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            AnimatedVisibility(
+                visible = selectedDate != null,
+                enter = expandVertically(),
+                exit = shrinkVertically()
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.flag),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Column {
-                        Text(
-                            text  = "잠금화면에 표시",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = Color(0xFF1D1D1F),
-                            ),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.flag),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
                         )
-                        Text(
-                            text = "알림창에서 바로 완료 처리 가능",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF6B7280),
-                        )
+                        Column {
+                            Text(
+                                text  = "알림 표시",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color(0xFF1D1D1F),
+                                )
+                            )
+                            Text(
+                                text = "알림창에서 바로 완료 처리 가능",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF6B7280),
+                            )
+                        }
                     }
+                    Switch(
+                        checked = showOnLockScreen,
+                        onCheckedChange = { showOnLockScreen = it; syncDraft() },
+                    )
                 }
-                Switch(
-                    checked = showOnLockScreen,
-                    onCheckedChange = { showOnLockScreen = it; syncDraft() },
-                )
             }
 
             // ── 버튼 행 ───────────────────────────────────────

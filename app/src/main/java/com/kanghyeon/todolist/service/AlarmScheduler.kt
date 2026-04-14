@@ -36,7 +36,7 @@ class AlarmScheduler @Inject constructor(
      */
     fun schedule(task: TaskEntity) {
         val dueDate = task.dueDate ?: return
-        val minutes = task.reminderMinutes ?: return
+        val minutes = task.reminderMinutes ?: 0
         if (task.isDone) return
 
         if (dueDate < System.currentTimeMillis() + 5 * 60_000L) return
