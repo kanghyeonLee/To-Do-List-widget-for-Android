@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,24 +64,50 @@ fun TrashScreen(
             onDismissRequest = { showEmptyConfirm = false },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.trash_2),
+                    painter           = painterResource(R.drawable.trash_2),
                     contentDescription = null,
-                    modifier = Modifier.padding(4.dp),
+                    tint               = MaterialTheme.colorScheme.error,
+                    modifier           = Modifier.size(28.dp),
                 )
             },
-            title = { Text("휴지통 비우기") },
-            text = { Text("휴지통의 모든 항목이 영구 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.") },
+            title = {
+                Text(
+                    text  = "휴지통 비우기",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color      = Color(0xFF1D1D1F),
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    text  = "휴지통의 모든 항목이 영구 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color(0xFF6B7280),
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.emptyAllTrash()
                         showEmptyConfirm = false
                     }
-                ) { Text("비우기", color = MaterialTheme.colorScheme.error) }
+                ) {
+                    Text(
+                        text  = "비우기",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showEmptyConfirm = false }) { Text("취소") }
+                TextButton(onClick = { showEmptyConfirm = false }) {
+                    Text("취소", color = Color(0xFF6B7280))
+                }
             },
+            containerColor = Color.White,
+            shape          = RoundedCornerShape(20.dp),
         )
     }
 
@@ -181,16 +208,49 @@ private fun TrashTaskItem(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("영구 삭제") },
-            text = { Text("「${task.title}」을(를) 영구 삭제할까요?\n이 작업은 되돌릴 수 없습니다.") },
+            icon = {
+                Icon(
+                    painter            = painterResource(R.drawable.trash_2),
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.error,
+                    modifier           = Modifier.size(28.dp),
+                )
+            },
+            title = {
+                Text(
+                    text  = "영구 삭제",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color      = Color(0xFF1D1D1F),
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    text  = "「${task.title}」을(를) 영구 삭제할까요?\n이 작업은 되돌릴 수 없습니다.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color(0xFF6B7280),
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = { onDelete(); showDeleteConfirm = false }
-                ) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+                ) {
+                    Text(
+                        text  = "삭제",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("취소") }
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("취소", color = Color(0xFF6B7280))
+                }
             },
+            containerColor = Color.White,
+            shape          = RoundedCornerShape(20.dp),
         )
     }
 

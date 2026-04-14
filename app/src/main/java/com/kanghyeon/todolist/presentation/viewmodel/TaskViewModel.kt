@@ -1,12 +1,17 @@
 package com.kanghyeon.todolist.presentation.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kanghyeon.todolist.data.local.entity.Priority
+import com.kanghyeon.todolist.data.local.entity.RoutineTemplateGroupWithTasks
+import com.kanghyeon.todolist.data.local.entity.RoutineTemplateTaskEntity
 import com.kanghyeon.todolist.data.local.entity.TaskEntity
+import com.kanghyeon.todolist.data.repository.RoutineTemplateRepository
 import com.kanghyeon.todolist.data.repository.TaskRepository
 import com.kanghyeon.todolist.service.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +22,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -63,7 +69,11 @@ data class NewTaskDraft(
  * - '아카이브' 탭: completedTasks — 배지 카운트 전용 (날짜 필터링은 archiveTasks StateFlow 사용)
  */
 data class TaskUiState(
-    /** 전체 미완료 할 일 (priority DESC, createdAt DESC) — '할 일' 탭 표시용 */
+    /** * 메인 '할 일' 탭 표시용 목록.
+     * - 아직 완료되지 않은 항목(isDone=false) 전체
+     * - 오늘 완료된 항목(isDone=true && updatedAt >= 오늘자정) 포함
+     * 정렬: 미완료 우선 -> 우선순위 높은 순 -> 최신순
+     */
     val activeTasks: List<TaskEntity> = emptyList(),
     /** 완료된 할 일 전체 — '아카이브' 탭 배지 카운트용 */
     val completedTasks: List<TaskEntity> = emptyList(),
@@ -94,8 +104,29 @@ sealed interface TaskEvent {
 @HiltViewModel
 class TaskViewModel @Inject constructor(
     private val repository: TaskRepository,
+    private val templateRepository: RoutineTemplateRepository,
     private val alarmScheduler: AlarmScheduler,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    // ── SharedPreferences — 루틴 마지막 생성 날짜 ─────────────────
+    private val routinePrefs by lazy {
+        context.getSharedPreferences("routine_prefs", Context.MODE_PRIVATE)
+    }
+
+    // ── 루틴 템플릿 그룹 목록 (그룹 + 소속 할 일) ───────────────────
+    val templateGroups: StateFlow<List<RoutineTemplateGroupWithTasks>> =
+        templateRepository.getAllGroupsWithTasks()
+            .stateIn(
+                scope        = viewModelScope,
+                started      = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList(),
+            )
+
+    // ── 앱 시작 시 오늘 루틴 자동 생성 ──────────────────────────
+    init {
+        generateDailyRoutines()
+    }
 
     // ── UI State ─────────────────────────────────────────
     /**
@@ -110,8 +141,17 @@ class TaskViewModel @Inject constructor(
         repository.getActiveTasks(),
         repository.getCompletedTasks(),
     ) { active, completed ->
+        val todayStart = todayStartMs()
+
+        val completedToday = completed.filter { it.updatedAt >= todayStart }
+
+        val mainTasks = (active + completedToday).sortedWith(
+            compareBy<TaskEntity> { it.isDone } 
+                .thenByDescending { it.priority }
+                .thenByDescending { it.createdAt }
+        )
         TaskUiState(
-            activeTasks    = active,
+            activeTasks    = mainTasks,
             completedTasks = completed,
             isLoading      = false,
         )
@@ -132,15 +172,28 @@ class TaskViewModel @Inject constructor(
     /**
      * 선택된 날짜에 완료된 할 일 목록 (updatedAt 기준, DESC 정렬).
      *
-     * flatMapLatest: _selectedArchiveDate가 바뀌면 이전 구독을 즉시 취소하고
-     * 새 날짜 쿼리로 재구독 → 날짜 전환 시 이전 데이터 잔류 없음.
+     * [아카이브 정책 변경: 당일 이관 유예]
+     * - '오늘' 완료한 항목은 메인 탭(activeTasks)에 계속 노출되므로, 아카이브 탭과의 중복을 방지하기 위해 
+     * 선택된 날짜가 오늘(todayStartMs)이거나 그 이후인 경우 빈 리스트를 반환한다.
+     * - 자정이 지나 '어제'가 된 항목들부터 이 목록에 포함되어 아카이브 탭에 나타난다.
+     *
+     * flatMapLatest: 날짜가 바뀌면 즉시 이전 쿼리를 취소하고 새 날짜로 재구독한다.
      */
     val archiveTasks: StateFlow<List<TaskEntity>> = _selectedArchiveDate
         .flatMapLatest { startMs ->
-            repository.getCompletedTasksByDate(
-                startOfDay = startMs,
-                endOfDay   = startMs + DAY_MS - 1,
-            )
+            val todayStart = todayStartMs()
+            if (startMs >= todayStart) {
+                repository.getCompletedTasks().map { completedList ->
+                    completedList.filter { 
+                        it.isArchived && it.updatedAt >= startMs && it.updatedAt < startMs + DAY_MS 
+                    }
+                }
+            } else {
+                repository.getCompletedTasksByDate(
+                    startOfDay = startMs,
+                    endOfDay   = startMs + DAY_MS - 1,
+                )
+            }
         }
         .stateIn(
             scope        = viewModelScope,
@@ -271,17 +324,10 @@ class TaskViewModel @Inject constructor(
     }
 
     /**
-     * 완료/미완료 토글 — Task 전체를 받아 알람까지 일괄 처리.
-     *
-     * - 완료 전환 (isDone false → true):
-     *   1. DB isDone = true, updatedAt 갱신 → Room Flow가 자동으로
-     *      activeTasks에서 제거, completedTasks/archiveTasks에 추가
-     *   2. 예약된 알람 취소
-     *
-     * - 미완료 복구 (isDone true → false):
-     *   1. DB isDone = false → 할 일 목록으로 즉시 복귀
-     *   2. dueDate가 현재+5분 이후면 알람 재예약
-     *      (AlarmScheduler.schedule 내부에서 과거 시각은 자동으로 무시)
+     * 완료/미완료 토글 핸들러.
+     * * [UX 개선] 
+     * 완료(isDone=true) 처리되어도 즉시 아카이브로 이동하지 않고, 
+     * 뷰모델의 필터링 로직에 의해 당일 동안은 메인 화면에 취소선 상태로 유지.
      */
     fun toggleTaskCompletion(task: TaskEntity) {
         viewModelScope.launch {
@@ -412,6 +458,153 @@ class TaskViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 오늘 완료된 항목을 아카이브로 수동 동기화 (즉시 기록).
+     *
+     * [UX 개선: 수동 아카이브]
+     * - 기본적으로 완료 항목은 자정이 지나야 아카이브로 이동하지만,
+     * 사용자가 원할 때 즉시 'isArchived = true'로 변경하여 아카이브에 기록.
+     * - 동기화 후에도 당일 동안은 메인 화면(activeTasks)에 계속 유지된다.
+     */
+    fun syncCompletedTasksToArchive() {
+        viewModelScope.launch {
+            val todayStart = todayStartMs()
+            
+            val targetsToSync = uiState.value.activeTasks.filter { task ->
+                task.isDone && !task.isArchived && task.updatedAt >= todayStart
+            }
+            
+            if (targetsToSync.isEmpty()) {
+                emitEvent(TaskEvent.ShowMessage("새롭게 동기화할 완료 항목이 없습니다."))
+                return@launch
+            }
+
+            targetsToSync.forEach { task ->
+                repository.updateTask(task.copy(isArchived = true))
+            }
+            
+            emitEvent(TaskEvent.ShowMessage("${targetsToSync.size}개의 할 일을 아카이브에 기록했습니다."))
+        }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 루틴 템플릿 그룹 CRUD
+    // ──────────────────────────────────────────────────────
+
+    /** 새 그룹 생성 */
+    fun addTemplateGroup(name: String) {
+        if (name.isBlank()) {
+            emitEvent(TaskEvent.ShowMessage("그룹 이름을 입력해 주세요."))
+            return
+        }
+        viewModelScope.launch {
+            templateRepository.addGroup(name.trim())
+        }
+    }
+
+    /** 그룹 활성화/비활성화 토글 */
+    fun toggleTemplateGroupActive(id: Long, isActive: Boolean) {
+        viewModelScope.launch {
+            templateRepository.updateGroupActiveState(id, isActive)
+        }
+    }
+
+    /** 그룹명 변경 */
+    fun renameTemplateGroup(id: Long, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            templateRepository.updateGroupName(id, name.trim())
+        }
+    }
+
+    /** 그룹 삭제 (소속 할 일 CASCADE 삭제) */
+    fun deleteTemplateGroup(id: Long) {
+        viewModelScope.launch {
+            templateRepository.deleteGroup(id)
+        }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 루틴 템플릿 할 일 CRUD
+    // ──────────────────────────────────────────────────────
+
+    /** 그룹에 할 일 추가 */
+    fun addTemplateTask(
+        groupId: Long,
+        title: String,
+        description: String? = null,
+        priority: Int = Priority.MEDIUM.value,
+        showOnLockScreen: Boolean = true,
+    ) {
+        if (title.isBlank()) {
+            emitEvent(TaskEvent.ShowMessage("제목을 입력해 주세요."))
+            return
+        }
+        viewModelScope.launch {
+            templateRepository.addTask(
+                RoutineTemplateTaskEntity(
+                    groupId          = groupId,
+                    title            = title.trim(),
+                    description      = description?.trim(),
+                    priority         = priority,
+                    showOnLockScreen = showOnLockScreen,
+                )
+            )
+        }
+    }
+
+    /** 할 일 단건 삭제 */
+    fun deleteTemplateTask(id: Long) {
+        viewModelScope.launch {
+            templateRepository.deleteTask(id)
+        }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 루틴 자동 생성 (하루 1회, isActive 그룹만)
+    // ──────────────────────────────────────────────────────
+
+    /**
+     * 앱 시작 시 오늘 날짜를 확인하고, 아직 루틴이 생성되지 않았으면
+     * isActive == true 인 그룹의 할 일들을 TaskEntity로 복사한다.
+     *
+     * - 중복 방지: SharedPreferences의 last_routine_date 가 오늘이면 즉시 반환
+     * - 비활성 그룹 제외: getActiveGroupsWithTasksOnce()로 isActive=1만 조회
+     * - 날짜 기록: 템플릿이 없어도 오늘 날짜를 저장해 불필요한 재진입을 방지
+     */
+    private fun generateDailyRoutines() {
+        viewModelScope.launch {
+            val today = LocalDate.now().toString()   // "yyyy-MM-dd"
+            val lastDate = routinePrefs.getString(PREF_KEY_LAST_ROUTINE_DATE, null)
+            if (lastDate == today) return@launch
+
+            val activeGroups = templateRepository.getActiveGroupsWithTasksOnce()
+            var taskCount = 0
+
+            activeGroups.forEach { groupWithTasks ->
+                groupWithTasks.tasks.forEach { templateTask ->
+                    repository.saveTask(
+                        TaskEntity(
+                            title            = templateTask.title,
+                            description      = templateTask.description,
+                            priority         = templateTask.priority,
+                            showOnLockScreen = templateTask.showOnLockScreen,
+                        )
+                    )
+                    taskCount++
+                }
+            }
+
+            routinePrefs.edit()
+                .putString(PREF_KEY_LAST_ROUTINE_DATE, today)
+                .apply()
+
+            if (taskCount > 0) {
+                emitEvent(TaskEvent.ShowMessage("루틴 ${taskCount}개가 오늘의 할 일에 추가됐습니다."))
+            }
+        }
+    }
+
     // ──────────────────────────────────────────────────────
     // 내부 헬퍼
     // ──────────────────────────────────────────────────────
@@ -422,6 +615,7 @@ class TaskViewModel @Inject constructor(
 
     companion object {
         private const val DAY_MS = 24 * 60 * 60 * 1_000L
+        private const val PREF_KEY_LAST_ROUTINE_DATE = "last_routine_date"
 
         /** 오늘 00:00:00.000 epoch ms (로컬 타임존 기준) */
         fun todayStartMs(): Long =

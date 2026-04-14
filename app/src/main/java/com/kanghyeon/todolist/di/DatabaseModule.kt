@@ -2,6 +2,7 @@ package com.kanghyeon.todolist.di
 
 import android.content.Context
 import com.kanghyeon.todolist.data.local.AppDatabase
+import com.kanghyeon.todolist.data.local.dao.RoutineTemplateDao
 import com.kanghyeon.todolist.data.local.dao.TaskDao
 import dagger.Module
 import dagger.Provides
@@ -31,4 +32,8 @@ object DatabaseModule {
      */
     @Provides
     fun provideTaskDao(database: AppDatabase): TaskDao = database.taskDao()
+
+    @Provides
+    fun provideRoutineTemplateDao(database: AppDatabase): RoutineTemplateDao =
+        database.routineTemplateDao()
 }

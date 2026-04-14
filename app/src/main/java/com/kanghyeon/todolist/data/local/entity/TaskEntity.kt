@@ -51,6 +51,9 @@ data class TaskEntity(
      */
     val dueDate: Long? = null,
 
+    /** 아카이브 동기화 여부 */
+    val isArchived: Boolean = false,
+
     /** 생성 시각 (epoch ms) */
     val createdAt: Long = System.currentTimeMillis(),
 

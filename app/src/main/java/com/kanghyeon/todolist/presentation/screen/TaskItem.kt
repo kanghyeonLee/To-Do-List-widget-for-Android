@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -357,13 +358,15 @@ fun PriorityGroupCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 tasks.forEachIndexed { index, task ->
-                    GroupedTaskRow(
-                        task         = task,
-                        accentColor  = accentColor,
-                        onToggleDone = { onToggleDone(task) },
-                        onDelete     = { onDelete(task) },
-                        onEdit       = { onEdit(task) },
-                    )
+                    key(task.id) { 
+                        GroupedTaskRow(
+                            task         = task,
+                            accentColor  = accentColor,
+                            onToggleDone = { onToggleDone(task) },
+                            onDelete     = { onDelete(task) },
+                            onEdit       = { onEdit(task) },
+                        )
+                    }   
                     if (index < tasks.lastIndex) {
                         HorizontalDivider(
                             color     = accentColor.copy(alpha = 0.12f),

@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -68,6 +69,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kanghyeon.todolist.R
@@ -117,7 +119,9 @@ fun MainScreen(
     var showTrashScreen      by remember { mutableStateOf(false) }
     var selectedTab          by remember { mutableIntStateOf(0) }
     // 아카이브 일괄 삭제 확인 다이얼로그 표시 여부
-    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+    var showBulkDeleteConfirm    by remember { mutableStateOf(false) }
+    var showSyncConfirm          by remember { mutableStateOf(false) }
+    var showTemplateManage       by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -145,6 +149,27 @@ fun MainScreen(
         }
     }
 
+    // ── 시스템 뒤로 가기(Back Press) 통합 핸들링 ──────────────────────
+    val isAnyOverlayOpen = showTrashScreen || showTemplateManage || showBottomSheet || 
+                           showSyncConfirm || showBulkDeleteConfirm || editingTask != null
+
+    BackHandler(enabled = isAnyOverlayOpen) {
+        when {
+            showSyncConfirm -> showSyncConfirm = false
+            showBulkDeleteConfirm -> showBulkDeleteConfirm = false
+            
+           
+            showTrashScreen -> showTrashScreen = false
+            showTemplateManage -> showTemplateManage = false
+            
+           
+            showBottomSheet || editingTask != null -> {
+                showBottomSheet = false
+                viewModel.setEditingTask(null)
+            }
+        }
+    }
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -159,6 +184,15 @@ fun MainScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showTemplateManage = true }) {
+                        Icon(
+                            painter            = painterResource(R.drawable.layout_panel_top),
+                            contentDescription = "루틴 템플릿 관리",
+                            tint               = Color(0xFF6B7280),
+                            modifier           = Modifier.size(22.dp),
+                        )
+                    }
+
                     IconButton(onClick = { showTrashScreen = true }) {
                         Icon(
                             painter            = painterResource(R.drawable.trash_2),
@@ -167,7 +201,18 @@ fun MainScreen(
                             modifier           = Modifier.size(22.dp),
                         )
                     }
-                    // 아카이브 탭에 항목이 있을 때만 일괄 삭제 버튼 표시
+
+                    if (selectedTab == 0) {
+                        IconButton(onClick = { showSyncConfirm = true }) {
+                            Icon(
+                                painter            = painterResource(R.drawable.archive_restore), 
+                                contentDescription = "아카이브 수동 동기화",
+                                tint               = MaterialTheme.colorScheme.primary,
+                                modifier           = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+
                     if (selectedTab == 1 && archiveTasks.isNotEmpty()) {
                         IconButton(onClick = { showBulkDeleteConfirm = true }) {
                             Icon(
@@ -177,6 +222,59 @@ fun MainScreen(
                                 modifier           = Modifier.size(22.dp),
                             )
                         }
+                    }
+                    if (showSyncConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { showSyncConfirm = false },
+                            icon = {
+                                Icon(
+                                    painter            = painterResource(R.drawable.archive_restore),
+                                    contentDescription = null,
+                                    tint               = MaterialTheme.colorScheme.primary,
+                                    modifier           = Modifier.size(28.dp),
+                                )
+                            },
+                            title = {
+                                Text(
+                                    text  = "아카이브 수동 동기화",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color      = Color(0xFF1D1D1F),
+                                    ),
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text  = "오늘 완료한 할 일들을 지금 바로 아카이브에 기록하시겠습니까?\n\n(기록 후에도 자정 전까지는 메인 화면에 계속 유지됩니다.)",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = Color(0xFF6B7280),
+                                    ),
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        viewModel.syncCompletedTasksToArchive()
+                                        showSyncConfirm = false
+                                    },
+                                ) {
+                                    Text(
+                                        text  = "동기화",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                        ),
+                                    )
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showSyncConfirm = false }) {
+                                    Text("취소", color = Color(0xFF6B7280))
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        )
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -240,9 +338,10 @@ fun MainScreen(
                     selected = selectedTab == 0,
                     onClick  = { selectedTab = 0 },
                     text     = {
-                        val count = uiState.activeTasks.size
+                        val totalCount = uiState.activeTasks.size
+                        val completedCount = uiState.activeTasks.count { it.isDone }                            
                         Text(
-                            text  = if (count > 0) "할 일 ($count)" else "할 일",
+                            text  = "할 일 ($completedCount / $totalCount)",
                             color = if (selectedTab == 0) MaterialTheme.colorScheme.primary
                                     else Color(0xFF6B7280),
                             style = MaterialTheme.typography.labelLarge.copy(
@@ -342,6 +441,14 @@ fun MainScreen(
         TrashScreen(
             viewModel = viewModel,
             onBack    = { showTrashScreen = false },
+        )
+    }
+
+    // ── 루틴 템플릿 관리 BottomSheet ──────────────────────────────
+    if (showTemplateManage) {
+        TemplateManageBottomSheet(
+            viewModel = viewModel,
+            onDismiss = { showTemplateManage = false },
         )
     }
 
@@ -588,6 +695,28 @@ private fun ArchiveContent(
                     utcTimeMillis <= System.currentTimeMillis() + 86_400_000L
             },
         )
+
+        // DatePicker 화이트 톤 색상 — 선택 강조색은 기존 인디고 유지
+        val dpColors = DatePickerDefaults.colors(
+            containerColor             = Color.White,
+            titleContentColor          = Color(0xFF6B7280),
+            headlineContentColor       = Color(0xFF1D1D1F),
+            weekdayContentColor        = Color(0xFF6B7280),
+            subheadContentColor        = Color(0xFF1D1D1F),
+            navigationContentColor     = Color(0xFF1D1D1F),
+            yearContentColor           = Color(0xFF1D1D1F),
+            currentYearContentColor    = MaterialTheme.colorScheme.primary,
+            selectedYearContentColor   = Color.White,
+            selectedYearContainerColor = MaterialTheme.colorScheme.primary,
+            dayContentColor            = Color(0xFF1D1D1F),
+            disabledDayContentColor    = Color(0xFFD1D5DB),
+            selectedDayContentColor    = Color.White,
+            selectedDayContainerColor  = MaterialTheme.colorScheme.primary,
+            todayContentColor          = MaterialTheme.colorScheme.primary,
+            todayDateBorderColor       = MaterialTheme.colorScheme.primary,
+            dividerColor               = Color(0xFFE5E7EB),
+        )
+
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -599,8 +728,10 @@ private fun ArchiveContent(
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) { Text("취소") }
             },
+            shape  = RoundedCornerShape(20.dp),
+            colors = dpColors,
         ) {
-            DatePicker(state = datePickerState)
+            DatePicker(state = datePickerState, colors = dpColors)
         }
     }
 
