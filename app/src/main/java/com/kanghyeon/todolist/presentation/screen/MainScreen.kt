@@ -189,7 +189,7 @@ fun MainScreen(
                     // 루틴 템플릿 관리 버튼
                     IconButton(onClick = { showTemplateSheet = true }) {
                         Icon(
-                            painter            = painterResource(R.drawable.archive_restore),
+                            painter            = painterResource(R.drawable.layout_panel_top),
                             contentDescription = "루틴 템플릿 관리",
                             tint               = Color(0xFF6B7280),
                             modifier           = Modifier.size(22.dp),

@@ -215,7 +215,7 @@ private fun GroupListScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        painter            = painterResource(R.drawable.archive_restore),
+                        painter            = painterResource(R.drawable.layout_panel_top),
                         contentDescription = null,
                         tint               = MaterialTheme.colorScheme.primary,
                         modifier           = Modifier.size(18.dp),
@@ -422,7 +422,7 @@ private fun GroupDetailScreen(
             onDismissRequest = { showApplyConfirm = false },
             icon = {
                 Icon(
-                    painter            = painterResource(R.drawable.archive_restore),
+                    painter            = painterResource(R.drawable.layout_panel_top),
                     contentDescription = null,
                     tint               = MaterialTheme.colorScheme.primary,
                     modifier           = Modifier.size(28.dp),
