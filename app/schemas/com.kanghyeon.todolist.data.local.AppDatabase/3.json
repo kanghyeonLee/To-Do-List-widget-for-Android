@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "6fa9fa0921b6ddde1006fd6deb80ca65",
+    "identityHash": "6bccf8dfe5dba37ee5884280f7bff512",
     "entities": [
       {
         "tableName": "tasks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `isDone` INTEGER NOT NULL, `isDeleted` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `showOnLockScreen` INTEGER NOT NULL, `dueDate` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `repeatType` TEXT NOT NULL, `reminderMinutes` INTEGER)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `isDone` INTEGER NOT NULL, `isDeleted` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `showOnLockScreen` INTEGER NOT NULL, `dueDate` INTEGER, `isArchived` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `repeatType` TEXT NOT NULL, `reminderMinutes` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -55,6 +55,12 @@
             "columnName": "dueDate",
             "affinity": "INTEGER",
             "notNull": false
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true
           },
           {
             "fieldPath": "createdAt",
@@ -111,7 +117,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6fa9fa0921b6ddde1006fd6deb80ca65')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6bccf8dfe5dba37ee5884280f7bff512')"
     ]
   }
 }

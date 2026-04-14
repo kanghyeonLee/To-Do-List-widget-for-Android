@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,7 +49,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +57,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kanghyeon.todolist.R
@@ -71,18 +69,10 @@ import com.kanghyeon.todolist.presentation.theme.PriorityLow
 import com.kanghyeon.todolist.presentation.theme.PriorityMedium
 import com.kanghyeon.todolist.presentation.viewmodel.TaskViewModel
 
-// ══════════════════════════════════════════════════════════════════
-// 내비게이션 상태 — 두 화면 간 전환
-// ══════════════════════════════════════════════════════════════════
-
 private sealed interface TemplateScreen {
     data object GroupList : TemplateScreen
     data class GroupDetail(val groupId: Long) : TemplateScreen
 }
-
-// ══════════════════════════════════════════════════════════════════
-// TemplateManageBottomSheet — 루트 컴포저블
-// ══════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,7 +82,7 @@ fun TemplateManageBottomSheet(
 ) {
     val sheetState     = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val templateGroups by viewModel.templateGroups.collectAsStateWithLifecycle()
-    var currentScreen  by rememberSaveable { mutableStateOf<TemplateScreen>(TemplateScreen.GroupList) }
+    var currentScreen  by remember { mutableStateOf<TemplateScreen>(TemplateScreen.GroupList) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -104,12 +94,10 @@ fun TemplateManageBottomSheet(
             targetState = currentScreen,
             transitionSpec = {
                 if (targetState is TemplateScreen.GroupDetail) {
-                    // GroupList → GroupDetail: 왼쪽에서 오른쪽으로 슬라이드
                     (slideInHorizontally { it } + fadeIn()).togetherWith(
                         slideOutHorizontally { -it } + fadeOut()
                     )
                 } else {
-                    // GroupDetail → GroupList: 오른쪽에서 왼쪽으로 슬라이드
                     (slideInHorizontally { -it } + fadeIn()).togetherWith(
                         slideOutHorizontally { it } + fadeOut()
                     )
@@ -119,23 +107,23 @@ fun TemplateManageBottomSheet(
         ) { screen ->
             when (screen) {
                 is TemplateScreen.GroupList   -> GroupListScreen(
-                    groups        = templateGroups,
-                    onGroupClick  = { groupId -> currentScreen = TemplateScreen.GroupDetail(groupId) },
-                    onAddGroup    = { name -> viewModel.addTemplateGroup(name) },
-                    onToggleActive = { id, isActive -> viewModel.updateGroupActiveState(id, isActive) },
-                    onDeleteGroup = { id -> viewModel.deleteTemplateGroup(id) },
+                    groups         = templateGroups,
+                    onGroupClick   = { groupId -> currentScreen = TemplateScreen.GroupDetail(groupId) },
+                    onAddGroup     = { name -> viewModel.addTemplateGroup(name) },
+                    onToggleActive = { id, isActive -> viewModel.toggleTemplateGroupActive(id, isActive) },
+                    onDeleteGroup  = { id -> viewModel.deleteTemplateGroup(id) },
                 )
                 is TemplateScreen.GroupDetail -> {
                     val group = templateGroups.find { it.group.id == screen.groupId }
                     if (group != null) {
                         GroupDetailScreen(
-                            group       = group,
-                            onBack      = { currentScreen = TemplateScreen.GroupList },
-                            onAddTask   = { title, desc, priority ->
+                            group        = group,
+                            onBack       = { currentScreen = TemplateScreen.GroupList },
+                            onAddTask    = { title, desc, priority ->
                                 viewModel.addTemplateTask(screen.groupId, title, desc, priority)
                             },
                             onDeleteTask = { id -> viewModel.deleteTemplateTask(id) },
-                            onApplyNow  = { viewModel.applyTemplateNow(screen.groupId) },
+                            onApplyNow   = { viewModel.applyTemplateNow(screen.groupId) },
                         )
                     }
                 }
@@ -143,10 +131,6 @@ fun TemplateManageBottomSheet(
         }
     }
 }
-
-// ══════════════════════════════════════════════════════════════════
-// 화면 1: 그룹 목록
-// ══════════════════════════════════════════════════════════════════
 
 @Composable
 private fun GroupListScreen(
@@ -156,11 +140,10 @@ private fun GroupListScreen(
     onToggleActive: (Long, Boolean) -> Unit,
     onDeleteGroup:  (Long) -> Unit,
 ) {
-    var showAddForm       by remember { mutableStateOf(false) }
-    var newGroupName      by remember { mutableStateOf("") }
-    var confirmDeleteId   by remember { mutableStateOf<Long?>(null) }
+    var showAddForm     by remember { mutableStateOf(false) }
+    var newGroupName    by remember { mutableStateOf("") }
+    var confirmDeleteId by remember { mutableStateOf<Long?>(null) }
 
-    // ── 삭제 확인 다이얼로그 ──────────────────────────────────────
     confirmDeleteId?.let { groupId ->
         val group = groups.find { it.group.id == groupId }
         AlertDialog(
@@ -211,7 +194,6 @@ private fun GroupListScreen(
             .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp),
     ) {
-        // ── 헤더 ───────────────────────────────────────────────────
         Row(
             modifier              = Modifier
                 .fillMaxWidth()
@@ -220,7 +202,7 @@ private fun GroupListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(
@@ -233,7 +215,7 @@ private fun GroupListScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        painter            = painterResource(R.drawable.rotate_ccw),
+                        painter            = painterResource(R.drawable.archive_restore),
                         contentDescription = null,
                         tint               = MaterialTheme.colorScheme.primary,
                         modifier           = Modifier.size(18.dp),
@@ -258,7 +240,6 @@ private fun GroupListScreen(
         HorizontalDivider(color = CardBorderColor)
         Spacer(Modifier.height(12.dp))
 
-        // ── 그룹 목록 ──────────────────────────────────────────────
         if (groups.isEmpty()) {
             Box(
                 modifier         = Modifier
@@ -267,9 +248,9 @@ private fun GroupListScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text  = "등록된 템플릿이 없습니다.\n아래 버튼으로 템플릿을 추가해 보세요.",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF9CA3AF)),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    text      = "등록된 템플릿이 없습니다.\n아래 버튼으로 템플릿을 추가해 보세요.",
+                    style     = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF9CA3AF)),
+                    textAlign = TextAlign.Center,
                 )
             }
         } else {
@@ -286,7 +267,6 @@ private fun GroupListScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // ── 그룹 추가 폼 ───────────────────────────────────────────
         if (showAddForm) {
             Column(
                 modifier = Modifier
@@ -335,10 +315,7 @@ private fun GroupListScreen(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment     = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = {
-                        newGroupName = ""
-                        showAddForm  = false
-                    }) { Text("취소") }
+                    TextButton(onClick = { newGroupName = ""; showAddForm = false }) { Text("취소") }
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = {
@@ -362,11 +339,7 @@ private fun GroupListScreen(
                     1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                 ),
             ) {
-                Icon(
-                    painter            = painterResource(R.drawable.plus),
-                    contentDescription = null,
-                    modifier           = Modifier.size(18.dp),
-                )
+                Icon(painterResource(R.drawable.plus), null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text  = "새 템플릿 추가",
@@ -376,10 +349,6 @@ private fun GroupListScreen(
         }
     }
 }
-
-// ══════════════════════════════════════════════════════════════════
-// 그룹 카드 (GroupListScreen 내)
-// ══════════════════════════════════════════════════════════════════
 
 @Composable
 private fun GroupCard(
@@ -416,8 +385,8 @@ private fun GroupCard(
             checked         = group.group.isActive,
             onCheckedChange = onToggleActive,
             colors          = SwitchDefaults.colors(
-                checkedThumbColor  = Color.White,
-                checkedTrackColor  = MaterialTheme.colorScheme.primary,
+                checkedThumbColor   = Color.White,
+                checkedTrackColor   = MaterialTheme.colorScheme.primary,
                 uncheckedThumbColor = Color.White,
                 uncheckedTrackColor = Color(0xFFD1D5DB),
             ),
@@ -434,31 +403,26 @@ private fun GroupCard(
     }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 화면 2: 그룹 상세 (할 일 목록 + 즉시 추가 버튼)
-// ══════════════════════════════════════════════════════════════════
-
 @Composable
 private fun GroupDetailScreen(
-    group:       RoutineTemplateGroupWithTasks,
-    onBack:      () -> Unit,
-    onAddTask:   (title: String, description: String?, priority: Int) -> Unit,
+    group:        RoutineTemplateGroupWithTasks,
+    onBack:       () -> Unit,
+    onAddTask:    (title: String, description: String?, priority: Int) -> Unit,
     onDeleteTask: (Long) -> Unit,
-    onApplyNow:  () -> Unit,
+    onApplyNow:   () -> Unit,
 ) {
-    var showApplyConfirm  by remember { mutableStateOf(false) }
-    var showAddTaskForm   by remember { mutableStateOf(false) }
-    var taskTitle         by remember { mutableStateOf("") }
-    var taskDesc          by remember { mutableStateOf("") }
-    var selectedPriority  by remember { mutableIntStateOf(Priority.MEDIUM.value) }
+    var showApplyConfirm by remember { mutableStateOf(false) }
+    var showAddTaskForm  by remember { mutableStateOf(false) }
+    var taskTitle        by remember { mutableStateOf("") }
+    var taskDesc         by remember { mutableStateOf("") }
+    var selectedPriority by remember { mutableIntStateOf(Priority.MEDIUM.value) }
 
-    // ── 즉시 추가 확인 다이얼로그 ─────────────────────────────────
     if (showApplyConfirm) {
         AlertDialog(
             onDismissRequest = { showApplyConfirm = false },
             icon = {
                 Icon(
-                    painter            = painterResource(R.drawable.rotate_ccw),
+                    painter            = painterResource(R.drawable.archive_restore),
                     contentDescription = null,
                     tint               = MaterialTheme.colorScheme.primary,
                     modifier           = Modifier.size(28.dp),
@@ -478,14 +442,9 @@ private fun GroupDetailScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        onApplyNow()
-                        showApplyConfirm = false
-                    },
-                    shape  = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                    ),
+                    onClick = { onApplyNow(); showApplyConfirm = false },
+                    shape   = RoundedCornerShape(10.dp),
+                    colors  = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 ) {
                     Text(
                         text  = "확인",
@@ -503,10 +462,10 @@ private fun GroupDetailScreen(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp),
     ) {
-        // ── 상단 뒤로가기 + 그룹명 ─────────────────────────────────
         Row(
             modifier          = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -532,7 +491,7 @@ private fun GroupDetailScreen(
         HorizontalDivider(color = CardBorderColor)
         Spacer(Modifier.height(16.dp))
 
-        // ── 즉시 추가 버튼 ─────────────────────────────────────────
+        // ── 오늘 할 일에 즉시 추가하기 버튼 ───────────────────────
         Button(
             onClick  = { if (group.tasks.isNotEmpty()) showApplyConfirm = true else onApplyNow() },
             modifier = Modifier.fillMaxWidth(),
@@ -543,11 +502,7 @@ private fun GroupDetailScreen(
             ),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
         ) {
-            Icon(
-                painter            = painterResource(R.drawable.plus),
-                contentDescription = null,
-                modifier           = Modifier.size(18.dp),
-            )
+            Icon(painterResource(R.drawable.plus), null, Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(
                 text  = "오늘 할 일에 즉시 추가하기",
@@ -557,7 +512,6 @@ private fun GroupDetailScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // ── 할 일 목록 ─────────────────────────────────────────────
         Row(
             modifier              = Modifier.fillMaxWidth(),
             verticalAlignment     = Alignment.CenterVertically,
@@ -589,9 +543,9 @@ private fun GroupDetailScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text  = "등록된 할 일이 없습니다.\n아래 버튼으로 추가해 보세요.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF9CA3AF)),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    text      = "등록된 할 일이 없습니다.\n아래 버튼으로 추가해 보세요.",
+                    style     = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF9CA3AF)),
+                    textAlign = TextAlign.Center,
                 )
             }
         } else {
@@ -609,7 +563,6 @@ private fun GroupDetailScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // ── 할 일 추가 폼 ──────────────────────────────────────────
         if (showAddTaskForm) {
             Column(
                 modifier = Modifier
@@ -629,7 +582,6 @@ private fun GroupDetailScreen(
                         color      = MaterialTheme.colorScheme.primary,
                     ),
                 )
-                // 제목
                 TextField(
                     value         = taskTitle,
                     onValueChange = { taskTitle = it },
@@ -647,7 +599,6 @@ private fun GroupDetailScreen(
                         unfocusedIndicatorColor = CardBorderColor,
                     ),
                 )
-                // 메모 (선택)
                 TextField(
                     value         = taskDesc,
                     onValueChange = { taskDesc = it },
@@ -661,7 +612,8 @@ private fun GroupDetailScreen(
                     keyboardActions = KeyboardActions(onDone = {
                         if (taskTitle.isNotBlank()) {
                             onAddTask(taskTitle, taskDesc.ifBlank { null }, selectedPriority)
-                            taskTitle = ""; taskDesc = ""; selectedPriority = Priority.MEDIUM.value
+                            taskTitle = ""; taskDesc = ""
+                            selectedPriority = Priority.MEDIUM.value
                             showAddTaskForm = false
                         }
                     }),
@@ -672,22 +624,20 @@ private fun GroupDetailScreen(
                         unfocusedIndicatorColor = CardBorderColor,
                     ),
                 )
-                // 우선순위 칩
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val chips = listOf(
+                    listOf(
                         Triple(Priority.HIGH.value,   "높음", PriorityHigh),
                         Triple(Priority.MEDIUM.value, "보통", PriorityMedium),
                         Triple(Priority.LOW.value,    "낮음", PriorityLow),
-                    )
-                    chips.forEach { (value, label, color) ->
+                    ).forEach { (value, label, color) ->
                         FilterChip(
                             selected = selectedPriority == value,
                             onClick  = { selectedPriority = value },
                             label    = { Text(label, style = MaterialTheme.typography.labelSmall) },
                             colors   = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor    = color.copy(alpha = 0.15f),
-                                selectedLabelColor        = color,
-                                selectedLeadingIconColor  = color,
+                                selectedContainerColor   = color.copy(alpha = 0.15f),
+                                selectedLabelColor       = color,
+                                selectedLeadingIconColor = color,
                             ),
                         )
                     }
@@ -726,11 +676,7 @@ private fun GroupDetailScreen(
                     1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                 ),
             ) {
-                Icon(
-                    painter            = painterResource(R.drawable.plus),
-                    contentDescription = null,
-                    modifier           = Modifier.size(18.dp),
-                )
+                Icon(painterResource(R.drawable.plus), null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text  = "할 일 추가",
@@ -741,10 +687,6 @@ private fun GroupDetailScreen(
     }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 템플릿 할 일 아이템 (GroupDetailScreen 내)
-// ══════════════════════════════════════════════════════════════════
-
 @Composable
 private fun TemplateTaskItem(
     title:       String,
@@ -753,9 +695,9 @@ private fun TemplateTaskItem(
     onDelete:    () -> Unit,
 ) {
     val (priorityLabel, priorityColor) = when (priority) {
-        Priority.HIGH.value   -> "높음" to PriorityHigh
-        Priority.LOW.value    -> "낮음" to PriorityLow
-        else                  -> "보통" to PriorityMedium
+        Priority.HIGH.value -> "높음" to PriorityHigh
+        Priority.LOW.value  -> "낮음" to PriorityLow
+        else                -> "보통" to PriorityMedium
     }
 
     Row(
@@ -767,12 +709,7 @@ private fun TemplateTaskItem(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // 우선순위 닷
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(priorityColor, CircleShape),
-        )
+        Box(modifier = Modifier.size(8.dp).background(priorityColor, CircleShape))
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -791,13 +728,9 @@ private fun TemplateTaskItem(
             }
         }
         Spacer(Modifier.width(8.dp))
-        // 우선순위 뱃지
         Box(
             modifier = Modifier
-                .background(
-                    color = priorityColor.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(6.dp),
-                )
+                .background(priorityColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 3.dp),
         ) {
             Text(
@@ -809,10 +742,7 @@ private fun TemplateTaskItem(
             )
         }
         Spacer(Modifier.width(4.dp))
-        IconButton(
-            onClick  = onDelete,
-            modifier = Modifier.size(32.dp),
-        ) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
             Icon(
                 painter            = painterResource(R.drawable.x),
                 contentDescription = "삭제",

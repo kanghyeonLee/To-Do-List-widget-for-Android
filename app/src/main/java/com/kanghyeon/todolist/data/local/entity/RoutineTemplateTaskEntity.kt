@@ -6,9 +6,10 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * 루틴 템플릿 하위 할 일 (TaskEntity의 청사진)
+ * 루틴 템플릿 그룹에 속한 개별 할 일 (TaskEntity의 청사진)
  *
- * - [groupId]: 소속 그룹 FK (그룹 삭제 시 CASCADE 삭제)
+ * - groupId: RoutineTemplateGroupEntity.id 참조 (CASCADE 삭제)
+ * - 자동/수동 추가 시 TaskEntity로 복사되는 청사진(blueprint)
  * - priority: [Priority].value (Int) 와 동일한 형식으로 저장
  * - dueDate 없음 — 실제 TaskEntity 생성 시 오늘 날짜 기준으로 설정
  */
@@ -32,11 +33,15 @@ data class RoutineTemplateTaskEntity(
     /** 소속 그룹 ID */
     val groupId: Long,
 
+    /** 할 일 제목 */
     val title: String,
 
+    /** 선택적 메모 */
     val description: String? = null,
 
+    /** 우선순위 (Priority.value) */
     val priority: Int = Priority.MEDIUM.value,
 
+    /** 잠금화면 알림 여부 */
     val showOnLockScreen: Boolean = true,
 )

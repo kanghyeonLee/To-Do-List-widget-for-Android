@@ -19,7 +19,7 @@ import com.kanghyeon.todolist.data.local.entity.TaskEntity
  *
  * [버전 관리 전략]
  * - version을 올릴 때 반드시 Migration 객체를 addMigrations()에 등록할 것
- * - 개발 중에는 fallbackToDestructiveMigration()를 허용하지만
+ * - 개발 중에는 fallbackToDestructiveMigrationOnDowngrade()를 허용하지만
  *   릴리즈 빌드에서는 반드시 명시적 Migration을 사용해야 한다.
  *
  * [Hilt 연동]
@@ -33,8 +33,8 @@ import com.kanghyeon.todolist.data.local.entity.TaskEntity
         RoutineTemplateGroupEntity::class,
         RoutineTemplateTaskEntity::class,
     ],
-    version = 4,
-    exportSchema = true,   // 스키마 JSON 파일 자동 생성 → git으로 버전 추적 가능
+    version = 5,
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -54,19 +54,14 @@ abstract class AppDatabase : RoomDatabase() {
                 instance ?: buildDatabase(context).also { instance = it }
             }
 
-        /**
-         * v1 → v2: reminderMinutes(INTEGER, nullable) 컬럼 추가.
-         */
+        /** v1 → v2: reminderMinutes(INTEGER, nullable) 컬럼 추가. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tasks ADD COLUMN reminderMinutes INTEGER DEFAULT NULL")
             }
         }
 
-        /**
-         * v2 → v3: isDeleted(INTEGER, NOT NULL DEFAULT 0) 컬럼 추가.
-         * Soft Delete 지원. 기존 행은 모두 isDeleted = 0 (정상) 유지.
-         */
+        /** v2 → v3: isDeleted(INTEGER, NOT NULL DEFAULT 0) 컬럼 추가. */
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tasks ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0")
@@ -74,39 +69,65 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * v3 → v4: 루틴 템플릿 테이블 2개 추가.
-         * routine_template_groups: 그룹(이름, 활성화 여부)
-         * routine_template_tasks: 그룹 소속 할 일 청사진 (FK CASCADE)
+         * v3 → v4: 루틴 템플릿 단일 테이블 생성 (임시 구조).
+         * v4 → v5 마이그레이션에서 이 테이블을 제거하고 1:N 구조로 전환한다.
          */
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     """
-                    CREATE TABLE IF NOT EXISTS `routine_template_groups` (
-                        `id`        INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        `name`      TEXT    NOT NULL,
-                        `isActive`  INTEGER NOT NULL DEFAULT 1,
-                        `createdAt` INTEGER NOT NULL
+                    CREATE TABLE IF NOT EXISTS routine_templates (
+                        id               INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title            TEXT    NOT NULL,
+                        description      TEXT,
+                        priority         INTEGER NOT NULL DEFAULT 1,
+                        showOnLockScreen INTEGER NOT NULL DEFAULT 1,
+                        createdAt        INTEGER NOT NULL
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /**
+         * v4 → v5: 루틴 템플릿을 1:N 구조로 고도화.
+         *
+         * - routine_templates (단일 테이블) 제거
+         * - routine_template_groups (그룹, isActive 포함) 신규 생성
+         * - routine_template_tasks  (그룹별 할 일, FK CASCADE) 신규 생성
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS routine_templates")
+
                 db.execSQL(
                     """
-                    CREATE TABLE IF NOT EXISTS `routine_template_tasks` (
-                        `id`              INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        `groupId`         INTEGER NOT NULL,
-                        `title`           TEXT    NOT NULL,
-                        `description`     TEXT,
-                        `priority`        INTEGER NOT NULL DEFAULT 1,
-                        `showOnLockScreen` INTEGER NOT NULL DEFAULT 1,
-                        FOREIGN KEY (`groupId`) REFERENCES `routine_template_groups` (`id`)
-                            ON DELETE CASCADE
+                    CREATE TABLE IF NOT EXISTS routine_template_groups (
+                        id        INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name      TEXT    NOT NULL,
+                        isActive  INTEGER NOT NULL DEFAULT 1,
+                        createdAt INTEGER NOT NULL
                     )
                     """.trimIndent()
                 )
+
                 db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_routine_template_tasks_groupId` " +
-                    "ON `routine_template_tasks` (`groupId`)"
+                    """
+                    CREATE TABLE IF NOT EXISTS routine_template_tasks (
+                        id               INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        groupId          INTEGER NOT NULL,
+                        title            TEXT    NOT NULL,
+                        description      TEXT,
+                        priority         INTEGER NOT NULL DEFAULT 1,
+                        showOnLockScreen INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY(groupId) REFERENCES routine_template_groups(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_routine_template_tasks_groupId " +
+                    "ON routine_template_tasks(groupId)"
                 )
             }
         }
@@ -117,7 +138,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 DB_NAME,
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
     }

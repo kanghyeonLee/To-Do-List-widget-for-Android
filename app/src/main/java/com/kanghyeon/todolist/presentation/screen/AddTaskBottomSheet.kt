@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -194,6 +196,8 @@ fun AddTaskBottomSheet(
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) { Text("취소") }
             },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp),
             text = {
                 // AndroidView로 XML에서만 지정 가능한 timePickerMode="spinner" 적용
                 AndroidView(
@@ -226,10 +230,12 @@ fun AddTaskBottomSheet(
     // ── BottomSheet ───────────────────────────────────────────
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
+        sheetState       = sheetState,
+        shape            = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        containerColor   = Color.White,
         dragHandle = {
             Box(
-                modifier = Modifier
+                modifier         = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center,
@@ -239,7 +245,7 @@ fun AddTaskBottomSheet(
                         .width(40.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)),
+                        .background(Color(0xFFE5E7EB)),   // 흰 배경 위 연회색 핸들
                 )
             }
         },
@@ -260,8 +266,11 @@ fun AddTaskBottomSheet(
         ) {
             // ── 헤더 ─────────────────────────────────────────
             Text(
-                text = if (isEditMode) "할 일 수정" else "새 할 일",
-                style = MaterialTheme.typography.titleLarge,
+                text  = if (isEditMode) "할 일 수정" else "새 할 일",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color      = Color(0xFF1D1D1F),
+                ),
             )
 
             // ── 제목 입력 ─────────────────────────────────────
@@ -284,13 +293,22 @@ fun AddTaskBottomSheet(
                     imeAction = ImeAction.Next,
                 ),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor   = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor   = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    errorContainerColor     = Color.Transparent,
-                    errorIndicatorColor     = Color.Transparent,
-                    disabledContainerColor  = Color.Transparent,
+                    focusedContainerColor      = Color.Transparent,
+                    unfocusedContainerColor    = Color.Transparent,
+                    focusedIndicatorColor      = MaterialTheme.colorScheme.primary,
+                    unfocusedIndicatorColor    = Color(0xFFE5E7EB),
+                    errorContainerColor        = Color.Transparent,
+                    errorIndicatorColor        = MaterialTheme.colorScheme.error,
+                    disabledContainerColor     = Color.Transparent,
+                    focusedTextColor           = Color(0xFF1D1D1F),
+                    unfocusedTextColor         = Color(0xFF1D1D1F),
+                    errorTextColor             = Color(0xFF1D1D1F),
+                    focusedLabelColor          = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor        = Color(0xFF6B7280),
+                    errorLabelColor            = MaterialTheme.colorScheme.error,
+                    focusedPlaceholderColor    = Color(0xFF9CA3AF),
+                    unfocusedPlaceholderColor  = Color(0xFF9CA3AF),
+                    errorSupportingTextColor   = MaterialTheme.colorScheme.error,
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -309,11 +327,17 @@ fun AddTaskBottomSheet(
                 ),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor   = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor   = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledContainerColor  = Color.Transparent,
+                    focusedContainerColor     = Color.Transparent,
+                    unfocusedContainerColor   = Color.Transparent,
+                    focusedIndicatorColor     = MaterialTheme.colorScheme.primary,
+                    unfocusedIndicatorColor   = Color(0xFFE5E7EB),
+                    disabledContainerColor    = Color.Transparent,
+                    focusedTextColor          = Color(0xFF1D1D1F),
+                    unfocusedTextColor        = Color(0xFF1D1D1F),
+                    focusedLabelColor         = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor       = Color(0xFF6B7280),
+                    focusedPlaceholderColor   = Color(0xFF9CA3AF),
+                    unfocusedPlaceholderColor = Color(0xFF9CA3AF),
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -323,7 +347,7 @@ fun AddTaskBottomSheet(
                 Text(
                     text = "우선순위",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFF6B7280),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PriorityChip(
@@ -352,7 +376,7 @@ fun AddTaskBottomSheet(
                 Text(
                     text = "마감 시간",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFF6B7280),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -393,7 +417,7 @@ fun AddTaskBottomSheet(
                     Text(
                         text = "사전 알림",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color(0xFF6B7280),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ReminderChip("없음",  reminderMinutes == null) { reminderMinutes = null; syncDraft() }
@@ -422,13 +446,15 @@ fun AddTaskBottomSheet(
                     )
                     Column {
                         Text(
-                            text = "잠금화면에 표시",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text  = "잠금화면에 표시",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = Color(0xFF1D1D1F),
+                            ),
                         )
                         Text(
                             text = "알림창에서 바로 완료 처리 가능",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color(0xFF6B7280),
                         )
                     }
                 }

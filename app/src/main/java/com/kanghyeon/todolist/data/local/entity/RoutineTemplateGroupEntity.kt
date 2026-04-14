@@ -7,7 +7,8 @@ import androidx.room.PrimaryKey
  * 루틴 템플릿 그룹 (예: "출근 루틴", "주말 루틴")
  *
  * 하나의 그룹이 여러 [RoutineTemplateTaskEntity]를 소유한다.
- * [isActive] = true인 그룹만 자정 자동 주입(generateDailyRoutines)에 참여한다.
+ * - isActive: true인 그룹의 할 일만 매일 TaskEntity로 자동 복사됨
+ * - CASCADE 삭제: 그룹 삭제 시 연결된 RoutineTemplateTaskEntity도 함께 제거
  */
 @Entity(tableName = "routine_template_groups")
 data class RoutineTemplateGroupEntity(
@@ -15,10 +16,12 @@ data class RoutineTemplateGroupEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
+    /** 템플릿 그룹 이름 */
     val name: String,
 
-    /** true: 자동/수동 주입 허용, false: 비활성화 */
+    /** 활성화 여부 — false이면 자동/수동 추가 대상에서 제외 */
     val isActive: Boolean = true,
 
+    /** 생성 시각 (정렬 기준) */
     val createdAt: Long = System.currentTimeMillis(),
 )
