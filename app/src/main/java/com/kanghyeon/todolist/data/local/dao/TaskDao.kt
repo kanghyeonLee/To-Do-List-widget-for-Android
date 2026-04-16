@@ -18,7 +18,7 @@ interface TaskDao {
     @Query(
         """
         SELECT * FROM tasks
-        WHERE showOnLockScreen = 1 AND isDone = 0 AND isDeleted = 0
+        WHERE showOnLockScreen = 1 AND isDone = 0 AND isDeleted = 0 AND isArchived = 0
         ORDER BY priority DESC, dueDate ASC, sortOrder ASC
         """
     )
@@ -60,7 +60,7 @@ interface TaskDao {
     @Query(
         """
         SELECT * FROM tasks
-        WHERE isDone = 0 AND isDeleted = 0
+        WHERE isDone = 0 AND isDeleted = 0 AND isArchived = 0
         ORDER BY priority DESC, createdAt DESC
         """
     )

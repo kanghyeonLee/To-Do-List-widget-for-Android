@@ -142,8 +142,6 @@ fun MainScreen(
     var showTrashScreen        by remember { mutableStateOf(false) }
     var showTemplateSheet      by remember { mutableStateOf(false) }
     var selectedTab            by remember { mutableIntStateOf(MainTab.TASKS.ordinal) }
-    // 아카이브 일괄 삭제 확인 다이얼로그 표시 여부
-    var showBulkDeleteConfirm    by remember { mutableStateOf(false) }
     var showSyncConfirm          by remember { mutableStateOf(false) }
     var showTemplateManage       by remember { mutableStateOf(false) }
     // 목표 관련
@@ -181,13 +179,12 @@ fun MainScreen(
 
     // ── 시스템 뒤로 가기(Back Press) 통합 핸들링 ──────────────────────
     val isAnyOverlayOpen = showTrashScreen || showTemplateManage || showBottomSheet ||
-                           showSyncConfirm || showBulkDeleteConfirm || editingTask != null ||
+                           showSyncConfirm || editingTask != null ||
                            goalDetailId != null || showGoalSheet
 
     BackHandler(enabled = isAnyOverlayOpen) {
         when {
             showSyncConfirm -> showSyncConfirm = false
-            showBulkDeleteConfirm -> showBulkDeleteConfirm = false
             goalDetailId != null -> {
                 goalDetailId = null
                 goalViewModel.selectGoal(null)
@@ -240,17 +237,6 @@ fun MainScreen(
                                 painter            = painterResource(R.drawable.archive_restore),
                                 contentDescription = "아카이브 수동 동기화",
                                 tint               = MaterialTheme.colorScheme.primary,
-                                modifier           = Modifier.size(22.dp),
-                            )
-                        }
-                    }
-
-                    if (selectedTab == MainTab.ARCHIVE.ordinal && archiveTasks.isNotEmpty()) {
-                        IconButton(onClick = { showBulkDeleteConfirm = true }) {
-                            Icon(
-                                painter            = painterResource(R.drawable.trash_2),
-                                contentDescription = "이 날의 완료 항목 전체 휴지통 이동",
-                                tint               = MaterialTheme.colorScheme.error,
                                 modifier           = Modifier.size(22.dp),
                             )
                         }
@@ -446,62 +432,6 @@ fun MainScreen(
                 }
             }
         }
-    }
-
-    // ── 아카이브 일괄 삭제 확인 다이얼로그 ────────────────────────
-    // [버그 수정] 즉시 영구 삭제 → 확인 후 휴지통 이동으로 변경
-    if (showBulkDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBulkDeleteConfirm = false },
-            icon = {
-                Icon(
-                    painter            = painterResource(R.drawable.trash_2),
-                    contentDescription = null,
-                    tint               = MaterialTheme.colorScheme.error,
-                    modifier           = Modifier.size(28.dp),
-                )
-            },
-            title = {
-                Text(
-                    text  = "완료 항목 일괄 삭제",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color      = Color(0xFF1D1D1F),
-                    ),
-                )
-            },
-            text = {
-                Text(
-                    text  = "이 날짜의 완료된 할 일을 모두\n휴지통으로 이동하시겠습니까?\n\n휴지통에서 복구하거나 영구 삭제할 수 있습니다.",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = Color(0xFF6B7280),
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.clearCompletedForSelectedDate()
-                        showBulkDeleteConfirm = false
-                    },
-                ) {
-                    Text(
-                        text  = "휴지통으로 이동",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBulkDeleteConfirm = false }) {
-                    Text("취소")
-                }
-            },
-            shape          = RoundedCornerShape(16.dp),
-            containerColor = Color.White,
-        )
     }
 
     // ── 휴지통 화면 ────────────────────────────────────────────────

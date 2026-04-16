@@ -159,7 +159,12 @@ class TaskViewModel @Inject constructor(
         val todayStart = todayStartMs()
 
         // D-Day 할 일(dueDate != null)은 '할 일' 탭에서 제외
-        val completedToday = completed.filter { it.updatedAt >= todayStart && it.dueDate == null }
+        // 아카이브에서 체크된 과거 항목이 다시 올라오지 않도록 archivedAt < todayStart 인 경우 제외
+        val completedToday = completed.filter { 
+            it.updatedAt >= todayStart && 
+            it.dueDate == null &&
+            (it.archivedAt == null || it.archivedAt >= todayStart)
+        }
         val nonDDayActive  = active.filter { it.dueDate == null }
 
         val mainTasks = (nonDDayActive + completedToday).sortedWith(
