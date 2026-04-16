@@ -68,7 +68,7 @@ def call_openai(prompt: str, key: str) -> str:
 
 
 def call_gemini(prompt: str, key: str) -> str:
-    model = "gemini-2.0-flash"
+    model = "gemini-2.5-flash"
     url   = (
         "https://generativelanguage.googleapis.com/v1beta"
         f"/models/{model}:generateContent?key={key}"

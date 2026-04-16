@@ -101,10 +101,11 @@ import java.util.Locale
 // 메인 하단 탭 메타 데이터
 // ══════════════════════════════════════════════════════════════════
 private enum class MainTab(val title: String, @DrawableRes val iconRes: Int) {
+    AI("AI", R.drawable.sparkles),
     DDAY("D-Day", R.drawable.calendar_clock),
     TASKS("할 일", R.drawable.house),
     ARCHIVE("아카이브", R.drawable.archive),
-    GOALS("목표", R.drawable.calendar_check),
+    GOALS("목표", R.drawable.calendar_check)
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -126,6 +127,7 @@ private data class PriorityPageMeta(
 fun MainScreen(
     viewModel:     TaskViewModel = hiltViewModel(),
     goalViewModel: GoalViewModel = hiltViewModel(),
+    aiViewModel:   com.kanghyeon.todolist.presentation.viewmodel.AiViewModel = hiltViewModel()
 ) {
     val uiState              by viewModel.uiState.collectAsStateWithLifecycle()
     val archiveDate          by viewModel.selectedArchiveDate.collectAsStateWithLifecycle()
@@ -429,6 +431,21 @@ fun MainScreen(
                             }
                         )
                     }
+                }
+                currentTab == MainTab.AI -> {
+                    val aiUiState by aiViewModel.uiState.collectAsStateWithLifecycle()
+                    val scope = rememberCoroutineScope()
+                    AiScreen(
+                        uiState = aiUiState,
+                        onPromptChange = { aiViewModel.updatePrompt(it) },
+                        onGenerate = { aiViewModel.generate() },
+                        onSaveSelected = { tasks, goals -> aiViewModel.saveSelected(tasks, goals) },
+                        onShowMessage = { msg ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar(msg)
+                            }
+                        }
+                    )
                 }
             }
         }

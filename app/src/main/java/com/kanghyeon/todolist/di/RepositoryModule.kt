@@ -43,4 +43,10 @@ abstract class RepositoryModule {
     abstract fun bindRoutineTemplateRepository(
         impl: RoutineTemplateRepositoryImpl,
     ): RoutineTemplateRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAiRepository(
+        impl: com.kanghyeon.todolist.data.repository.AiRepositoryImpl
+    ): com.kanghyeon.todolist.data.repository.AiRepository
 }

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 // ──────────────────────────────────────────────────────────────────
 // app/build.gradle.kts
 // ──────────────────────────────────────────────────────────────────
@@ -16,6 +18,13 @@ plugins {
     alias(libs.plugins.room)
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY", "")
+
 android {
     namespace   = "com.kanghyeon.todolist"
     compileSdk  = 35          // 최신 SDK로 컴파일 (API 35 = Android 15)
@@ -31,6 +40,8 @@ android {
 
         // Room: 스키마 JSON 파일 내보내기 위치 (room {} 블록에서 설정)
         // 이 파일을 git으로 추적하면 마이그레이션 이력을 관리할 수 있음
+
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
@@ -138,4 +149,8 @@ dependencies {
     // ── 디버그 전용 ────────────────────────────────────────────
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // ── Gemini AI ──────────────────────────────────────────────
+    implementation(libs.generativeai)
+    implementation(libs.gson)
 }
