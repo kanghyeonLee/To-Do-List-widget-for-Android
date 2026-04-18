@@ -17,15 +17,15 @@ plugins {
 }
 
 android {
-    namespace   = "com.kanghyeon.todolist"
+    namespace   = "com.kang.dailyarchive"
     compileSdk  = 35          // 최신 SDK로 컴파일 (API 35 = Android 15)
 
     defaultConfig {
-        applicationId   = "com.kanghyeon.todolist"
+        applicationId   = "com.kang.dailyarchive"
         minSdk          = 26  // Android 8.0: startForegroundService(), NotificationChannel 등 지원
         targetSdk       = 35
-        versionCode     = 2
-        versionName     = "1.2.0"
+        versionCode     = 4
+        versionName     = "1.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

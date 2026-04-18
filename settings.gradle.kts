@@ -36,5 +36,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ToDoList"
+rootProject.name = "DailyArchive"
 include(":app")
