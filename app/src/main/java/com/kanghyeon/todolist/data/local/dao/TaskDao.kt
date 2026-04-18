@@ -213,6 +213,20 @@ interface TaskDao {
     fun getActiveTasksByGoalId(goalId: Long): Flow<List<TaskEntity>>
 
     /**
+     * 특정 목표에 연결된 완료된 Task 목록.
+     */
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE goalId    = :goalId
+          AND isDeleted = 0
+          AND isDone = 1
+        ORDER BY updatedAt DESC
+        """
+    )
+    fun getCompletedTasksByGoalId(goalId: Long): Flow<List<TaskEntity>>
+
+    /**
      * goalId가 연결된 Task에서 goalId를 해제한다.
      * 목표 삭제 시 연결된 Task가 고아 상태가 되지 않도록 호출.
      */

@@ -301,6 +301,7 @@ fun GoalCard(
 fun GoalDetailContent(
     gwp:            GoalWithProgress?,
     tasks:          List<TaskEntity>,
+    completedTasks: List<TaskEntity>,
     onBack:         () -> Unit,
     onToggleDone:   (TaskEntity) -> Unit,
     onDeleteTask:   (TaskEntity) -> Unit,
@@ -502,6 +503,26 @@ fun GoalDetailContent(
                             color = Color(0xFFD1D5DB),
                         )
                     }
+                }
+            }
+
+            if (completedTasks.isNotEmpty()) {
+                item {
+                    Text(
+                        text     = "완료된 할 일 (${completedTasks.size})",
+                        style    = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color    = Color(0xFF9CA3AF), // 활성 할 일보다 살짝 연한 색상
+                        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                    )
+                }
+                items(completedTasks, key = { "goal_completed_${it.id}" }) { task ->
+                    TaskItem(
+                        task         = task,
+                        onToggleDone = { onToggleDone(task) }, // 체크 해제 시 다시 위로 올라감
+                        onDelete     = { onDeleteTask(task) },
+                        onEdit       = { onEditTask(task) },
+                        modifier     = Modifier.animateItem(),
+                    )
                 }
             }
 

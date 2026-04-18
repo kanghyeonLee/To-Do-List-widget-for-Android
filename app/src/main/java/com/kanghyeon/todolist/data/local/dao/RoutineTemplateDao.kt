@@ -52,6 +52,9 @@ interface RoutineTemplateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTask(task: RoutineTemplateTaskEntity): Long
 
+    @androidx.room.Update
+    suspend fun updateTask(task: RoutineTemplateTaskEntity)
+
     @Query("DELETE FROM routine_template_tasks WHERE id = :id")
     suspend fun deleteTask(id: Long)
 }

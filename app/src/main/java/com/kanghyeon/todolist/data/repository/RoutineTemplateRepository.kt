@@ -36,6 +36,9 @@ interface RoutineTemplateRepository {
     /** 그룹에 할 일 추가 */
     suspend fun addTask(task: RoutineTemplateTaskEntity): Long
 
+    /** 할 일 수정 */
+    suspend fun updateTask(task: RoutineTemplateTaskEntity)
+
     /** 할 일 단건 삭제 */
     suspend fun deleteTask(id: Long)
 }

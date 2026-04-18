@@ -78,6 +78,7 @@ private sealed interface TemplateScreen {
 @Composable
 fun TemplateManageBottomSheet(
     viewModel: TaskViewModel,
+    goalsWithProgress: List<com.kanghyeon.todolist.presentation.viewmodel.GoalWithProgress> = emptyList(),
     onDismiss: () -> Unit,
 ) {
     val sheetState     = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -87,7 +88,7 @@ fun TemplateManageBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState       = sheetState,
-        containerColor   = MaterialTheme.colorScheme.surface,
+        containerColor   = Color.White,
         shape            = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
     ) {
         AnimatedContent(
@@ -118,9 +119,25 @@ fun TemplateManageBottomSheet(
                     if (group != null) {
                         GroupDetailScreen(
                             group          = group,
+                            goalsWithProgress = goalsWithProgress,
                             onBack         = { currentScreen = TemplateScreen.GroupList },
-                            onAddTask      = { title, desc, priority ->
-                                viewModel.addTemplateTask(screen.groupId, title, desc, priority)
+                            onAddTask      = { title, desc, priority, goalId ->
+                                viewModel.addTemplateTask(
+                                    groupId = screen.groupId,
+                                    title = title,
+                                    description = desc,
+                                    priority = priority,
+                                    goalId = goalId,
+                                )
+                            },
+                            onUpdateTask   = { task, title, desc, priority, goalId ->
+                                viewModel.updateTemplateTask(
+                                    task = task,
+                                    title = title,
+                                    description = desc,
+                                    priority = priority,
+                                    goalId = goalId,
+                                )
                             },
                             onDeleteTask   = { id -> viewModel.deleteTemplateTask(id) },
                             onApplyNow     = { viewModel.applyTemplateNow(screen.groupId) },
@@ -362,7 +379,7 @@ private fun GroupCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+            .background(Color.White, RoundedCornerShape(14.dp))
             .border(1.dp, CardBorderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onGroupClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -408,8 +425,10 @@ private fun GroupCard(
 @Composable
 private fun GroupDetailScreen(
     group:         RoutineTemplateGroupWithTasks,
+    goalsWithProgress: List<com.kanghyeon.todolist.presentation.viewmodel.GoalWithProgress>,
     onBack:        () -> Unit,
-    onAddTask:     (title: String, description: String?, priority: Int) -> Unit,
+    onAddTask:     (title: String, description: String?, priority: Int, goalId: Long?) -> Unit,
+    onUpdateTask:  (task: com.kanghyeon.todolist.data.local.entity.RoutineTemplateTaskEntity, title: String, description: String?, priority: Int, goalId: Long?) -> Unit,
     onDeleteTask:  (Long) -> Unit,
     onApplyNow:    () -> Unit,
     onRenameGroup: (String) -> Unit,
@@ -418,9 +437,12 @@ private fun GroupDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameInput      by remember { mutableStateOf("") }
     var showAddTaskForm  by remember { mutableStateOf(false) }
+    var editingTask      by remember { mutableStateOf<com.kanghyeon.todolist.data.local.entity.RoutineTemplateTaskEntity?>(null) }
     var taskTitle        by remember { mutableStateOf("") }
     var taskDesc         by remember { mutableStateOf("") }
     var selectedPriority by remember { mutableIntStateOf(Priority.MEDIUM.value) }
+    var selectedGoalId   by remember { mutableStateOf<Long?>(null) }
+    var showGoalDropdown by remember { mutableStateOf(false) }
 
     // ── 이름 수정 다이얼로그 ────────────────────────────────────────
     if (showRenameDialog) {
@@ -648,6 +670,15 @@ private fun GroupDetailScreen(
                         title       = task.title,
                         description = task.description,
                         priority    = task.priority,
+                        goalTitle   = goalsWithProgress.find { it.goal.id == task.goalId }?.goal?.title,
+                        onClick     = {
+                            editingTask = task
+                            taskTitle = task.title
+                            taskDesc = task.description ?: ""
+                            selectedPriority = task.priority
+                            selectedGoalId = task.goalId
+                            showAddTaskForm = true
+                        },
                         onDelete    = { onDeleteTask(task.id) },
                     )
                 }
@@ -704,9 +735,15 @@ private fun GroupDetailScreen(
                     ),
                     keyboardActions = KeyboardActions(onDone = {
                         if (taskTitle.isNotBlank()) {
-                            onAddTask(taskTitle, taskDesc.ifBlank { null }, selectedPriority)
+                            if (editingTask != null) {
+                                onUpdateTask(editingTask!!, taskTitle, taskDesc.ifBlank { null }, selectedPriority, selectedGoalId)
+                            } else {
+                                onAddTask(taskTitle, taskDesc.ifBlank { null }, selectedPriority, selectedGoalId)
+                            }
                             taskTitle = ""; taskDesc = ""
                             selectedPriority = Priority.MEDIUM.value
+                            selectedGoalId = null
+                            editingTask = null
                             showAddTaskForm = false
                         }
                     }),
@@ -735,6 +772,52 @@ private fun GroupDetailScreen(
                         )
                     }
                 }
+                
+                // 목표 선택기
+                Box {
+                    val selectedGoalTitle = goalsWithProgress.find { it.goal.id == selectedGoalId }?.goal?.title ?: "목표 선택 안 함"
+                    OutlinedButton(
+                        onClick = { showGoalDropdown = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderColor),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (selectedGoalId != null) MaterialTheme.colorScheme.primary else Color(0xFF6B7280)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = selectedGoalTitle,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Icon(
+                                painter = painterResource(R.drawable.layout_panel_top), // Use an existing icon as chevron_down might not exist
+                                contentDescription = "목표 선택",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = showGoalDropdown,
+                        onDismissRequest = { showGoalDropdown = false },
+                        modifier = Modifier.fillMaxWidth(0.9f).background(Color.White)
+                    ) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("선택 안 함", color = Color(0xFF6B7280)) },
+                            onClick = { selectedGoalId = null; showGoalDropdown = false }
+                        )
+                        goalsWithProgress.forEach { gwp ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(gwp.goal.title) },
+                                onClick = { selectedGoalId = gwp.goal.id; showGoalDropdown = false }
+                            )
+                        }
+                    }
+                }
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -743,21 +826,29 @@ private fun GroupDetailScreen(
                     TextButton(onClick = {
                         taskTitle = ""; taskDesc = ""
                         selectedPriority = Priority.MEDIUM.value
+                        selectedGoalId = null
+                        editingTask = null
                         showAddTaskForm = false
                     }) { Text("취소") }
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = {
                             if (taskTitle.isNotBlank()) {
-                                onAddTask(taskTitle, taskDesc.ifBlank { null }, selectedPriority)
+                                if (editingTask != null) {
+                                    onUpdateTask(editingTask!!, taskTitle, taskDesc.ifBlank { null }, selectedPriority, selectedGoalId)
+                                } else {
+                                    onAddTask(taskTitle, taskDesc.ifBlank { null }, selectedPriority, selectedGoalId)
+                                }
                                 taskTitle = ""; taskDesc = ""
                                 selectedPriority = Priority.MEDIUM.value
+                                selectedGoalId = null
+                                editingTask = null
                                 showAddTaskForm = false
                             }
                         },
                         enabled = taskTitle.isNotBlank(),
                         shape   = RoundedCornerShape(10.dp),
-                    ) { Text("추가") }
+                    ) { Text(if (editingTask != null) "수정" else "추가") }
                 }
             }
         } else {
@@ -785,6 +876,8 @@ private fun TemplateTaskItem(
     title:       String,
     description: String?,
     priority:    Int,
+    goalTitle:   String?,
+    onClick:     () -> Unit,
     onDelete:    () -> Unit,
 ) {
     val (priorityLabel, priorityColor) = when (priority) {
@@ -796,8 +889,9 @@ private fun TemplateTaskItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+            .background(Color.White, RoundedCornerShape(12.dp))
             .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -817,6 +911,17 @@ private fun TemplateTaskItem(
                 Text(
                     text  = description,
                     style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF6B7280)),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+            if (!goalTitle.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text  = "목표: $goalTitle",
+                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.primary),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
         }

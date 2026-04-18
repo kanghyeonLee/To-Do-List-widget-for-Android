@@ -121,6 +121,14 @@ class GoalViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 선택된 목표의 완료된 Task 목록 */
+    val completedGoalTasks: StateFlow<List<TaskEntity>> = _selectedGoalId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList())
+            else taskRepository.getCompletedTasksByGoalId(id) 
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     // ── 전체 목표 + 진행률 목록 ─────────────────────────────
     /**
      * 전체 목표에 대해 GoalWithProgress를 계산한다.

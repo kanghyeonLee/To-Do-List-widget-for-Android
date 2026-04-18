@@ -36,7 +36,7 @@ import com.kanghyeon.todolist.data.local.entity.TaskEntity
         RoutineTemplateGroupEntity::class,
         RoutineTemplateTaskEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -182,6 +182,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7 → v8: 루틴 템플릿 할 일에 goalId 추가
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE routine_template_tasks ADD COLUMN goalId INTEGER DEFAULT NULL")
+            }
+        }
+
         private fun buildDatabase(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -190,7 +199,7 @@ abstract class AppDatabase : RoomDatabase() {
             )
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7,
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
                 )
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()

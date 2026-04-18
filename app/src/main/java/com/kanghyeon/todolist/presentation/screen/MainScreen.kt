@@ -68,6 +68,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
@@ -136,6 +137,7 @@ fun MainScreen(
     val goalsWithProgress    by goalViewModel.goalsWithProgress.collectAsStateWithLifecycle()
     val selectedGoalProgress by goalViewModel.selectedGoalWithProgress.collectAsStateWithLifecycle()
     val goalTasks            by goalViewModel.selectedGoalTasks.collectAsStateWithLifecycle()
+    val completedGoalTasks   by goalViewModel.completedGoalTasks.collectAsStateWithLifecycle()
 
     val snackbarHostState      = remember { SnackbarHostState() }
     var showBottomSheet        by remember { mutableStateOf(false) }
@@ -337,7 +339,12 @@ fun MainScreen(
         bottomBar = {
             NavigationBar(
                 containerColor = Color.White,
-                tonalElevation = 8.dp
+                tonalElevation = 0.dp,
+                modifier = Modifier.border(
+                    width = 1.dp,
+                    color = Color(0xFFF3F4F6),
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                ).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             ) {
                 MainTab.values().forEachIndexed { index, tab ->
                     NavigationBarItem(
@@ -375,7 +382,7 @@ fun MainScreen(
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             unselectedIconColor = Color.Gray,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                            indicatorColor = Color.Transparent
                         )
                     )
                 }
@@ -412,6 +419,7 @@ fun MainScreen(
                         GoalDetailContent(
                             gwp = selectedGoalProgress,
                             tasks = goalTasks,
+                            completedTasks = completedGoalTasks,
                             onBack = { 
                                 goalDetailId = null
                                 goalViewModel.selectGoal(null)
@@ -446,6 +454,7 @@ fun MainScreen(
     if (showTemplateSheet) {
         TemplateManageBottomSheet(
             viewModel = viewModel,
+            goalsWithProgress = goalsWithProgress,
             onDismiss = { showTemplateSheet = false },
         )
     }

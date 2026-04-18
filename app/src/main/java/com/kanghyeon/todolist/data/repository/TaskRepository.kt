@@ -98,6 +98,9 @@ interface TaskRepository {
     /** 자정 동기화용: 아카이브되지 않은 전체 활성 할 일 단건 조회 */
     suspend fun getNonArchivedTasksOnce(): List<TaskEntity>
 
+    /** 특정 목표에 연결된 완료된 Task 목록 스트림 */
+    fun getCompletedTasksByGoalId(goalId: Long): Flow<List<TaskEntity>>
+
     /** 특정 할 일을 아카이브로 이동 (isArchived=1, archivedAt 설정) */
     suspend fun archiveTask(id: Long, archivedAt: Long)
 }

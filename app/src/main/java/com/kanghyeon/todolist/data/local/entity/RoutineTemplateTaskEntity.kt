@@ -44,4 +44,7 @@ data class RoutineTemplateTaskEntity(
 
     /** 잠금화면 알림 여부 */
     val showOnLockScreen: Boolean = true,
+
+    /** 연결된 목표 ID */
+    val goalId: Long? = null,
 )

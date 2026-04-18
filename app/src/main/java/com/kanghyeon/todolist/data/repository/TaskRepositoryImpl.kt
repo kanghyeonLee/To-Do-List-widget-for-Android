@@ -129,6 +129,9 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun getNonArchivedTasksOnce(): List<TaskEntity> =
         withContext(dispatcher) { dao.getNonArchivedTasksOnce() }
 
+    override fun getCompletedTasksByGoalId(goalId: Long): Flow<List<TaskEntity>> =
+        dao.getCompletedTasksByGoalId(goalId).flowOn(dispatcher)
+
     override suspend fun archiveTask(id: Long, archivedAt: Long) =
         withContext(dispatcher) {
             dao.archiveTask(

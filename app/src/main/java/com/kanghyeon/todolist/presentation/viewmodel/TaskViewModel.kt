@@ -576,6 +576,7 @@ class TaskViewModel @Inject constructor(
         description: String? = null,
         priority: Int = Priority.MEDIUM.value,
         showOnLockScreen: Boolean = true,
+        goalId: Long? = null,
     ) {
         if (title.isBlank()) {
             emitEvent(TaskEvent.ShowMessage("제목을 입력해 주세요."))
@@ -589,6 +590,31 @@ class TaskViewModel @Inject constructor(
                     description      = description?.trim(),
                     priority         = priority,
                     showOnLockScreen = showOnLockScreen,
+                    goalId           = goalId,
+                )
+            )
+        }
+    }
+
+    /** 템플릿 할 일 수정 */
+    fun updateTemplateTask(
+        task: RoutineTemplateTaskEntity,
+        title: String,
+        description: String? = null,
+        priority: Int = Priority.MEDIUM.value,
+        goalId: Long? = null,
+    ) {
+        if (title.isBlank()) {
+            emitEvent(TaskEvent.ShowMessage("제목을 입력해 주세요."))
+            return
+        }
+        viewModelScope.launch {
+            templateRepository.updateTask(
+                task.copy(
+                    title       = title.trim(),
+                    description = description?.trim(),
+                    priority    = priority,
+                    goalId      = goalId,
                 )
             )
         }
@@ -690,6 +716,7 @@ class TaskViewModel @Inject constructor(
                             description      = templateTask.description,
                             priority         = templateTask.priority,
                             showOnLockScreen = templateTask.showOnLockScreen,
+                            goalId           = templateTask.goalId,
                         )
                     )
                     taskCount++
@@ -731,6 +758,7 @@ class TaskViewModel @Inject constructor(
                         description     = templateTask.description,
                         priority        = templateTask.priority,
                         showOnLockScreen = templateTask.showOnLockScreen,
+                        goalId          = templateTask.goalId,
                     )
                 )
             }

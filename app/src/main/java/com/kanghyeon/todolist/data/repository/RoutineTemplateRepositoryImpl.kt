@@ -44,6 +44,9 @@ class RoutineTemplateRepositoryImpl @Inject constructor(
     override suspend fun addTask(task: RoutineTemplateTaskEntity): Long =
         withContext(dispatcher) { dao.insertTask(task) }
 
+    override suspend fun updateTask(task: RoutineTemplateTaskEntity) =
+        withContext(dispatcher) { dao.updateTask(task) }
+
     override suspend fun deleteTask(id: Long) =
         withContext(dispatcher) { dao.deleteTask(id) }
 }
