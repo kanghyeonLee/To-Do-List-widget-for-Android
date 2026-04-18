@@ -5,17 +5,12 @@
 # 트리거 전략:
 #   main 브랜치 push / PR  →  Job 1: Debug APK 빌드
 #   v* 태그 push           →  Job 2: Release APK 서명 + GitHub Release 게시
-#                          →  Job 3: AI 기반 README.md 릴리즈 노트 자동 업데이트
 #
 # 필요한 GitHub Secrets (Settings → Secrets and variables → Actions):
 #   KEYSTORE_BASE64   : base64 인코딩된 .jks 키스토어 파일 전체 내용
 #   KEY_ALIAS         : 키스토어 안의 키 alias 이름
 #   KEY_PASSWORD      : 키(key) 비밀번호
 #   STORE_PASSWORD    : 키스토어(store) 비밀번호
-#   LLM_API_KEY       : OpenAI 또는 Gemini API 키
-#
-# 선택적 GitHub Variables (Settings → Variables → Actions):
-#   LLM_PROVIDER      : 'openai' 또는 'gemini' (미설정 시 기본값: gemini)
 # ================================================================
 
 name: Android CI/CD
@@ -140,108 +135,3 @@ jobs:
           files: ${{ env.SIGNED_APK }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ──────────────────────────────────────────────────────────────
-  # Job 3 · AI 기반 README.md 릴리즈 노트 자동 업데이트
-  #         release Job 성공 후에만 실행
-  # ──────────────────────────────────────────────────────────────
-  update-readme:
-    name: "AI Release Notes → README"
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      # ── Step 1: main 브랜치 전체 이력 체크아웃 ──────────────────
-      #   fetch-depth: 0  →  전체 커밋 이력 + 모든 태그 필요
-      - name: Checkout main branch (full history)
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      # ── Step 2: 이전 태그 탐색 ───────────────────────────────
-      - name: Resolve previous tag
-        id: tags
-        run: |
-          CURRENT_TAG="${{ github.ref_name }}"
-
-          # 버전 순(version:refname) 정렬 후, 현재 태그 바로 앞 항목 추출
-          PREV_TAG=$(
-            git tag --sort=version:refname \
-              | grep -E '^v[0-9]+\.[0-9]+' \
-              | grep -B1 "^${CURRENT_TAG}$" \
-              | grep -v  "^${CURRENT_TAG}$" \
-              | tail -1
-          )
-
-          # 이전 태그가 없으면 저장소 최초 커밋을 기점으로 사용
-          if [ -z "$PREV_TAG" ]; then
-            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
-            echo "이전 태그 없음 — 최초 커밋 사용: $PREV_TAG"
-          else
-            echo "이전 태그: $PREV_TAG"
-          fi
-
-          echo "current_tag=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
-          echo "previous_tag=${PREV_TAG}"   >> "$GITHUB_OUTPUT"
-
-      # ── Step 3: 두 태그 사이 커밋 메시지 추출 ───────────────
-      - name: Extract commit messages
-        run: |
-          PREV="${{ steps.tags.outputs.previous_tag }}"
-          CURR="${{ steps.tags.outputs.current_tag }}"
-
-          git log "${PREV}..${CURR}" \
-            --pretty=format:"%s" \
-            --no-merges \
-            > /tmp/commits.txt
-
-          echo "=== Commits (${PREV} → ${CURR}) ==="
-          cat /tmp/commits.txt
-
-          # 커밋이 없을 경우 안전 처리
-          if [ ! -s /tmp/commits.txt ]; then
-            echo "변경사항 없음" > /tmp/commits.txt
-          fi
-
-      # ── Step 4: Python 환경 준비 ─────────────────────────────
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      # ── Step 5: AI API 호출 → 릴리즈 노트 생성 ──────────────
-      #   LLM_API_KEY  : GitHub Secret
-      #   LLM_PROVIDER : GitHub Variable ('openai' | 'gemini', 기본 gemini)
-      - name: Generate AI release notes
-        env:
-          LLM_API_KEY:  ${{ secrets.LLM_API_KEY }}
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-          CURRENT_TAG:  ${{ steps.tags.outputs.current_tag }}
-        run: python3 .github/scripts/gen_release_notes.py
-
-      # ── Step 6: README.md 주입 + 버전 배지 업데이트 ──────────
-      - name: Inject notes and update version badge
-        env:
-          CURRENT_TAG: ${{ steps.tags.outputs.current_tag }}
-        run: python3 .github/scripts/inject_readme.py
-
-      # ── Step 7: 변경된 README.md 커밋 & main에 푸시 ─────────
-      #   [skip ci] 포함 → 이 커밋으로 워크플로우가 재트리거되지 않음
-      - name: Commit and push README.md
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add README.md
-
-          if git diff --cached --quiet; then
-            echo "변경 사항 없음 — 커밋 생략"
-          else
-            git commit -m "docs: update changelog for ${{ github.ref_name }} [skip ci]"
-            git push origin main
-          fi
