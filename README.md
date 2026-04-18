@@ -6,7 +6,7 @@
 
 > 우선순위 기반 할 일 관리, 목표 연동 및 루틴 템플릿 기능을 갖춘 안드로이드 앱입니다.
 
-📥 **[최신버전 앱 다운로드 (APK)](https://github.com/kanghyeonLee/ToDoList/releases)**
+📥 **[최신버전 앱 다운로드 (APK)](https://github.com/kanghyeonLee/To-Do-List-App-for-Android/releases/tag/v1.4.1)**
 ---
 
 ## ✨ 주요 기능
